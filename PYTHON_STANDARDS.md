@@ -415,6 +415,84 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 ```
 
+## Configuration Files
+
+### pyproject.toml Template
+```toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "your-project-name"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "pydantic>=2.10.0",
+    "dynaconf>=3.2.0",
+    "dependency-injector>=4.41.0",
+    "httpx>=0.27.0",
+    "sqlalchemy>=2.0.0",
+    "asyncpg>=0.29.0",
+    "passlib[bcrypt]>=1.7.4",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "factory-boy>=3.3.0",
+    "faker>=24.0.0",
+    "loguru>=0.7.0",
+    "rich>=13.0.0",
+    "icecream>=2.1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/your-project"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-xvs --tb=short --strict-markers"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src"
+```
+
+### ruff.toml Template
+```toml
+line-length = 88
+target-version = "py312"
+
+[lint]
+select = ["ALL"]
+ignore = [
+    "D",      # docstrings
+    "COM812", # trailing comma
+    "ISC001", # single line concat
+    "TC002",  # third-party type-checking imports
+    "TC003",  # standard library type-checking imports
+    "Q000",   # double quotes (incompatible with single quote formatting)
+    "Q003",   # double quotes (incompatible with single quote formatting)
+]
+
+[lint.flake8-type-checking]
+runtime-evaluated-base-classes = [
+    "pydantic.BaseModel",
+    "fastapi.APIRouter",
+]
+runtime-evaluated-decorators = [
+    "pytest.fixture",
+    "fastapi.Depends",
+]
+
+[format]
+quote-style = "single"
+indent-style = "space"
+```
+
 ## Verification Commands
 ```bash
 # Run from project root

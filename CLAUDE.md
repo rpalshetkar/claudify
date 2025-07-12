@@ -74,4 +74,24 @@ For existing projects:
 /xfix     # Fix issues
 ```
 
+## Development Commands
+
+```bash
+# Install dependencies
+uv venv
+uv pip install -e .
+
+# Run tests
+pytest
+pytest -x  # Stop on first failure
+pytest -k test_name  # Run specific tests
+
+# Type checking
+mypy src
+
+# Linting and formatting
+ruff check . --fix
+ruff format .
+```
+
 Remember: This folder is the source of truth. Always refer here first.
