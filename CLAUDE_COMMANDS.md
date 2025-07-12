@@ -21,9 +21,21 @@ Example:
 ```
 /xinit fastapi
 > Project name? myapi
-> Create in subfolder? y
-✅ Created FastAPI project at ./myapi/ following PYTHON_STANDARDS.md
+> Create in subfolder? n
+✅ Created FastAPI project in current directory following PYTHON_STANDARDS.md
+
+Directory structure:
+./
+├── src/
+│   └── myapi/          # Python package
+│       ├── __init__.py
+│       └── main.py
+├── tests/
+├── pyproject.toml
+└── README.md
 ```
+
+**Important**: By default, creates project files in the CURRENT directory. Only creates a subfolder if you answer 'y' to "Create in subfolder?".
 
 ### How it works:
 1. Detects stack type

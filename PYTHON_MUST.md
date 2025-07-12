@@ -11,9 +11,10 @@ Essential patterns for every Python project. Start here, scale later.
 ## Project Structure
 
 ```
-project/
+# When using /xinit, this structure is created in your current directory:
+./
 ├── src/
-│   └── project/            # Your package name
+│   └── project/            # Your package name (replace 'project' with actual name)
 │       ├── __init__.py
 │       ├── main.py         # Entry point
 │       ├── api/
@@ -44,6 +45,8 @@ project/
 ├── pyproject.toml
 └── ruff.toml               # See below for config
 ```
+
+**Note**: The `src/project/` structure keeps your package code separate from project configuration files. This is Python packaging best practice.
 
 ### pyproject.toml Setup
 
