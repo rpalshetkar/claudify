@@ -54,7 +54,8 @@ def xfunc_name(
         ic(result)  # Debug with icecream
     except SpecificError as e:
         logger.error(f'Failed processing {required}: {e}')
-        raise ValueError(f'Cannot process {required}') from e
+        msg = f'Cannot process {required}'
+        raise ValueError(msg) from e
     
     console.print('[green]Success![/green]')
     return {'status': 'ok', 'data': result}
@@ -83,13 +84,14 @@ async def xfunc_async(url: str) -> str:
 ## MANDATORY Code Rules
 
 ✅ DO:
-- `from __future__ import annotations` FIRST
+- `from __future__ import annotations` FIRST (in EVERY Python file)
 - `str | None` not `Optional[str]`
 - `list[str]` not `List[str]`  
 - `except E as e: raise NewE() from e`
 - ALL functions have `-> ReturnType`
 - Single quotes for strings
 - Keyword-only args after `*`
+- Assign error messages to variables before raising
 
 ❌ DON'T:
 - `from typing import List, Optional, Union`
@@ -97,6 +99,7 @@ async def xfunc_async(url: str) -> str:
 - `raise` without `from e`
 - Functions >50 lines
 - Import paths with 'src' prefix
+- String literals in exceptions: `raise ValueError('msg')` → use `msg = 'msg'; raise ValueError(msg)`
 
 ## Import Rules
 - Package in src/myproject/
@@ -417,7 +420,62 @@ python_functions = ["test_*"]
 
 ## Configuration Files
 
-### pyproject.toml Template
+### pyproject.toml Template - Minimal CLI/Library
+```toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "your-project-name"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "loguru>=0.7.0",
+    "rich>=13.0.0",
+    "icecream>=2.1.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.0.0",
+    "typer>=0.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-cov>=5.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/your-project"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = [
+    "-v",
+    "--cov=your-project",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+pretty = true
+show_error_codes = true
+show_error_context = true
+show_column_numbers = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["icecream"]
+ignore_missing_imports = true
+```
+
+### pyproject.toml Template - Full API/Web App
 ```toml
 [build-system]
 requires = ["hatchling"]
@@ -459,36 +517,38 @@ asyncio_default_fixture_loop_scope = "function"
 python_version = "3.12"
 strict = true
 mypy_path = "src"
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["icecream"]
+ignore_missing_imports = true
 ```
 
-### ruff.toml Template
+### Ruff Configuration (in pyproject.toml)
 ```toml
-line-length = 88
+[tool.ruff]
 target-version = "py312"
+line-length = 120  # or 88 for black compatibility
+src = ["src", "tests"]
 
-[lint]
+[tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-    "D",      # docstrings
+    "D",      # docstrings (we'll use Google style selectively)
     "COM812", # trailing comma
     "ISC001", # single line concat
-    "TC002",  # third-party type-checking imports
-    "TC003",  # standard library type-checking imports
-    "Q000",   # double quotes (incompatible with single quote formatting)
-    "Q003",   # double quotes (incompatible with single quote formatting)
+    "S101",   # Use of assert detected (needed for tests)
+    "TD",     # todos
+    "FIX",    # fixme
+    "ERA",    # eradicate
+    "PLR0913", # too many arguments
+    "PLR2004", # magic value
+    "EM101",  # Exception string literals (conflicts with our rule)
+    "EM102",  # Exception f-string literals
+    "TRY003", # Long exception messages
 ]
 
-[lint.flake8-type-checking]
-runtime-evaluated-base-classes = [
-    "pydantic.BaseModel",
-    "fastapi.APIRouter",
-]
-runtime-evaluated-decorators = [
-    "pytest.fixture",
-    "fastapi.Depends",
-]
-
-[format]
+[tool.ruff.format]
 quote-style = "single"
 indent-style = "space"
 ```
@@ -501,5 +561,71 @@ mypy . --strict
 pytest --cov=src --cov-report=term-missing
 bandit -r src/  # Security checks
 ```
+
+## Test File Template
+
+```python
+"""Tests for module_name module."""
+from __future__ import annotations
+
+# Standard library
+from typing import Any
+from unittest.mock import MagicMock, patch
+
+# Third-party
+import pytest
+from loguru import logger
+
+# Local
+from myproject.module_name import function_to_test
+
+
+class TestFunctionName:
+    """Test cases for function_name."""
+
+    def test_success_case(self) -> None:
+        """Test function succeeds with valid input."""
+        result = function_to_test('valid_input')
+        assert result == expected_value
+        
+    def test_handles_exception(self) -> None:
+        """Test function handles exceptions properly."""
+        with pytest.raises(ValueError, match='Expected error'):
+            function_to_test('invalid_input')
+            
+    def test_with_mock(self) -> None:
+        """Test function with mocked dependencies."""
+        with (
+            patch('myproject.module_name.dependency') as mock_dep,
+            patch('myproject.module_name.logger.info') as mock_log,
+        ):
+            mock_dep.return_value = 'mocked_value'
+            result = function_to_test('input')
+            
+            mock_dep.assert_called_once_with('input')
+            mock_log.assert_called()
+            assert result == 'expected'
+            
+    @pytest.fixture
+    def sample_data(self) -> dict[str, Any]:
+        """Provide sample test data."""
+        return {
+            'key': 'value',
+            'number': 42,
+        }
+        
+    def test_with_fixture(self, sample_data: dict[str, Any]) -> None:
+        """Test using fixture data."""
+        result = function_to_test(sample_data)
+        assert result['processed'] is True
+```
+
+## Common Pitfalls to Avoid
+
+1. **Docstring formatting**: Ensure blank lines in docstrings don't have trailing whitespace
+2. **Exception messages**: Always assign to variable first: `msg = 'error'; raise ValueError(msg)`
+3. **Test mocking**: Use combined `with` statements for multiple patches
+4. **Import unused variables**: Remove or use underscore prefix for intentionally unused
+5. **Type annotations**: Include for ALL function parameters and returns, including test fixtures
 
 ## That's it. Security first, errors standardized, tests comprehensive.
