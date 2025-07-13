@@ -8,7 +8,13 @@ This is the central standards repository. When working on ANY project, refer to 
 
 ## 📚 Quick Reference Guide
 
+### General guidelines
+
+- Choose mermaid diagram than ascii diagrams
+- Don't modify the files in ~/dev/claudify without double confirmation from me
+
 ### By Technology Stack
+
 - **Python Projects** → [PYTHON_STANDARDS.md](./PYTHON_STANDARDS.md) + [PYTHON_STACK.md](./PYTHON_STACK.md) + [PYTHON_SNIPPETS.md](./PYTHON_SNIPPETS.md)
 - **Next.js/React Projects** → [NEXTJS_STANDARDS.md](./NEXTJS_STANDARDS.md) + [NEXTJS_STACK.md](./NEXTJS_STACK.md)
 - **Build Automation** → [BUILD_AUTOMATION.md](./BUILD_AUTOMATION.md)
@@ -17,7 +23,9 @@ This is the central standards repository. When working on ANY project, refer to 
 - **Custom Commands** → [CLAUDE_COMMANDS.md](./CLAUDE_COMMANDS.md)
 
 ### Stack Detection
+
 Look for these files to determine which standards apply:
+
 - `pyproject.toml` or `requirements.txt` → Python standards
 - `package.json` with "next" → Next.js standards
 - `package.json` with "react" → Next.js standards (we use Next.js for all React)
@@ -36,16 +44,20 @@ When starting work on any project:
 ### Referencing in Other Projects
 
 When creating CLAUDE.md in other projects, include:
+
 ```markdown
 ## Standards Reference
+
 This project follows standards from: /Users/rrp/dev/git/claudify/
+
 - Technology Stack: [Specify which .md files apply]
-- Commands: See CLAUDE_COMMANDS.md for /x* commands
+- Commands: See CLAUDE_COMMANDS.md for /x\* commands
 ```
 
 ## 🔧 Command System
 
 All projects can use the `/x*` command system:
+
 - `/xinit <stack>` - Initialize new project with standards
 - `/xfix` - Auto-fix code quality issues
 - `/xverify` - Verify against standards
@@ -57,6 +69,7 @@ See [CLAUDE_COMMANDS.md](./CLAUDE_COMMANDS.md) for full command documentation.
 ## 📋 Standards Priority
 
 When standards conflict:
+
 1. Language/Framework specific standards (PYTHON_STANDARDS, NEXTJS_STANDARDS)
 2. Stack specifications (PYTHON_STACK, NEXTJS_STACK)
 3. Infrastructure standards (INFRA_STACK)
@@ -65,11 +78,13 @@ When standards conflict:
 ## 🚀 Quick Start
 
 For new projects:
+
 ```bash
 /xinit [python|nextjs|fastapi|django|react]
 ```
 
 For existing projects:
+
 ```bash
 /xverify  # Check compliance
 /xfix     # Fix issues
