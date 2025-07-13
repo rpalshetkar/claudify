@@ -12,15 +12,18 @@ This is the central standards repository. When working on ANY project, refer to 
 
 - Choose mermaid diagram than ascii diagrams
 - Don't modify the files in ~/dev/claudify without double confirmation from me
+- Prefer editing existing files over creating new ones
+- Never create documentation files unless explicitly requested
 
 ### By Technology Stack
 
-- **Python Projects** → [PYTHON_STANDARDS.md](./PYTHON_STANDARDS.md) + [PYTHON_STACK.md](./PYTHON_STACK.md) + [PYTHON_SNIPPETS.md](./PYTHON_SNIPPETS.md)
+- **Python Projects** → [PYTHON_STANDARDS.md](./PYTHON_STANDARDS.md) + [PYTHON_STACK.md](./PYTHON_STACK.md) + [PYTHON_SNIPPETS.md](./PYTHON_SNIPPETS.md) + [PYTHON_MUST.md](./PYTHON_MUST.md)
 - **Next.js/React Projects** → [NEXTJS_STANDARDS.md](./NEXTJS_STANDARDS.md) + [NEXTJS_STACK.md](./NEXTJS_STACK.md)
 - **Build Automation** → [BUILD_AUTOMATION.md](./BUILD_AUTOMATION.md)
 - **Infrastructure Setup** → [INFRA_STACK.md](./INFRA_STACK.md)
 - **UX/UI Design** → [UX_PRINCIPLES.md](./UX_PRINCIPLES.md)
 - **Custom Commands** → [CLAUDE_COMMANDS.md](./CLAUDE_COMMANDS.md)
+- **Architecture Patterns** → [features/XARCH.md](./features/XARCH.md)
 
 ### Stack Detection
 
@@ -90,24 +93,67 @@ For existing projects:
 /xfix     # Fix issues
 ```
 
-## Development Commands
+## 💻 Common Development Commands
 
+### Python Projects (using uv)
 ```bash
-# Install dependencies
-uv venv
-uv pip install -e .
+# Setup
+uv venv && uv pip install -e .
 
-# Run tests
-pytest
-pytest -x  # Stop on first failure
+# Development
+uv run dev        # Start dev server
+uv run test       # Run all tests
+uv run lint       # Auto-fix linting (ruff check . --fix)
+uv run format     # Format code (ruff format .)
+uv run typecheck  # Type checking (mypy src)
+uv run quality    # All quality checks
+uv run check      # Quality + tests
+
+# Testing
+pytest -x         # Stop on first failure
 pytest -k test_name  # Run specific tests
+pytest -n auto    # Run tests in parallel
 
-# Type checking
-mypy src
-
-# Linting and formatting
-ruff check . --fix
-ruff format .
+# Database (if applicable)
+uv run db-upgrade # Apply migrations
+uv run db-migrate # Create new migration
+uv run db-reset   # Reset database
 ```
+
+### Next.js/React Projects
+```bash
+# Development
+npm run dev       # Start dev server
+npm run build     # Production build
+npm run lint      # ESLint
+npm run type-check # TypeScript checking
+npm run test      # Run tests
+```
+
+## 🏗️ Architecture Patterns
+
+Key architectural components defined in [features/XARCH.md](./features/XARCH.md):
+
+- **XObjPrototype**: Base model abstraction with validation
+- **XResource**: Connection factory for multiple data sources
+- **XInspector**: Schema discovery and model generation
+- **XRepository**: Data access with ACL and audit
+- **XModels**: Dynamic model registry with UI mappings
+
+## 🔒 Security Requirements
+
+All projects must implement:
+- Mandatory security headers for APIs
+- Input validation with Pydantic (Python) or Zod (TypeScript)
+- 80% minimum test coverage
+- Rate limiting on public endpoints
+- Error standardization
+
+## 📝 Important Notes
+
+- This folder is the **source of truth** for all standards
+- Always check here first before implementing patterns
+- When creating CLAUDE.md in other projects, reference this repository
+- Use `/x*` commands for automated workflows
 
 Remember: This folder is the source of truth. Always refer here first.
