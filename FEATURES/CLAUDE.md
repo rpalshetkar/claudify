@@ -15,6 +15,8 @@ Remember - For each feature step by step in the planning mode. Be as critical as
 
 As we plan if there are many steps lets go one step at a time. suggest approaches give pros and cons and usage example and do critically assess the approach and ask for decision. Make it very interactive kind of process
 
+- Remember when multiple decisions are being made go through each step and ask right questions, show sample, pros and cons and run through critical review process with me to help us reach a decision following best arch design principle. ultrathin everything
+
 #### Abstraction - Base Model called XObjPrototype
 
 - Models.md give good indication re what is required here as base construct. XObjPrototype is used to validate against schemas which are pydandic. Namespace support see how this would work for Settings
@@ -25,32 +27,37 @@ As we plan if there are many steps lets go one step at a time. suggest approache
 - Defaults are not within python files but .env.default
 - Support multiple environments to be loaded (exports/imports use case)
 - Always use settings derived from DynaConf
-- Connected to namespace and has this accessible so given namespace we get access to right resource including env. ns.env.production ns.env.development ns.env.gcp
 
-### Namespace
-
-#### Abstraction - Connector/Resource is this same. What should I use to make this right
+#### Abstraction - Resource
 
 - Do we need a connector or we can use resource. This is connection/resource factory and actual implementaition is in resource.
 - file connection, csv, xls, json, yaml
 - database connection, mongodb, mysql, postgres, etc.
 - rest endpoint connection
 - websocket connection
-- Metadata about connection params eg ns db collection etc. ns.table1
+- Metadata about connection params
 
 Eg Mongodb - will have more information populated around collections in db. This has right parameters to point to the right resource eg mongodb uri etc.
 
-ns.{collection} then it knows the object and can get more info from XObjPrototype meta object
-
-We should telling the name of the resouce that we have.
-
 #### Abstraction - Repository
 
-#### Abstraction - Data Pipeline
+With the resource now handy, define repo abstraction, lets start with crud methods, inspect method on collections, stats, describing the schema and it needs to be linked to model capabilities in MODELS.md
+
+ACL, Audit, Stats, Schema Inspection are main areas which would be considered, It would also be having some dynamic read only views like joins or some agreggation available. Linked to Resource also and should be having that metadata
 
 #### Abstraction - Data Xlator/Adapters/Translator/Mutators
 
-### Abstraction - Data Inspector/Schema Inspector
+#### Abstraction - Data Pipeline
+
+#### Abstraction - Data Inspector/Schema Inspector
+
+#### Namespace
+
+- To enable refering to any object created via XObjPrototype we need a way to refer to it. This is what namespace is for.
+- would be managed via caching/redis infra repositories
+- Simple get/set by '.' limited path. Disciplined naming
+
+### Registry - Functions/Models/Dynamic Models
 
 ## Stack Decisions
 
