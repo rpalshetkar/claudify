@@ -1,8 +1,9 @@
 # Python Must-Haves
 
-Essential patterns for every Python project. Start here, scale later.
+Essential patterns for every Python package. Start here, scale later.
 
-**Prerequisites**: 
+**Prerequisites**:
+
 - Package choices: See [PYTHON_STACK.md](./PYTHON_STACK.md)
 - Code style rules: See [PYTHON_STANDARDS.md](./PYTHON_STANDARDS.md)
 - Code examples: See [PYTHON_SNIPPETS.md](./PYTHON_SNIPPETS.md)
@@ -11,12 +12,12 @@ Essential patterns for every Python project. Start here, scale later.
 ## Project Structure
 
 ```
-# When using /xinit, this structure is created in your current directory:
-./
+# When using /xinit, this structure is created:
+folder/
 ├── src/
-│   └── project/            # Your package name (replace 'project' with actual name)
+│   └── module/              # Your module name
 │       ├── __init__.py
-│       ├── main.py         # Entry point
+│       ├── main.py          # Entry point
 │       ├── api/
 │       │   ├── __init__.py
 │       │   ├── routes.py
@@ -43,76 +44,18 @@ Essential patterns for every Python project. Start here, scale later.
 ├── settings.toml           # DynaConf settings
 ├── .secrets.toml          # Git-ignored secrets
 ├── pyproject.toml
-└── ruff.toml               # See below for config
+└── ruff.toml
 ```
 
-**Note**: The `src/project/` structure keeps your package code separate from project configuration files. This is Python packaging best practice.
+**Note**: The `src/module/` structure keeps your module code separate from project configuration files. This is Python packaging best practice.
 
-### pyproject.toml Setup
+### Configuration Files
 
-```toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+- **pyproject.toml**: See [pyproject.toml Setup](./PYTHON_SNIPPETS.md#pyprojecttoml-setup)
+- **ruff.toml**: See [Ruff Configuration](./PYTHON_SNIPPETS.md#rufftoml)
+- **settings.toml**: See [Settings TOML](./PYTHON_SNIPPETS.md#settings-toml)
+- **.env.example**: See below for environment variables
 
-[project]
-name = "project"
-version = "0.1.0"
-requires-python = ">=3.12"
-dependencies = [
-    # See PYTHON_STACK.md for approved packages
-    "fastapi>=0.115.0",
-    "pydantic>=2.10.0",
-    "dynaconf>=3.2.0",
-    "dependency-injector>=4.41.0",
-    "httpx>=0.27.0",
-    "sqlalchemy>=2.0.0",
-    "asyncpg>=0.29.0",
-    "passlib[bcrypt]>=1.7.4",
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "factory-boy>=3.3.0",
-    "faker>=24.0.0",
-    "loguru>=0.7.0",
-    "rich>=13.0.0",
-    "icecream>=2.1.0",
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/project"]
-
-[tool.pytest.ini_options]
-pythonpath = ["src"]
-testpaths = ["tests"]
-addopts = "-xvs --tb=short --strict-markers"
-asyncio_mode = "auto"
-
-[tool.mypy]
-python_version = "3.12"
-strict = true
-mypy_path = "src"
-```
-
-### ruff.toml
-
-```toml
-line-length = 88
-target-version = "py312"
-
-[lint]
-select = ["ALL"]
-ignore = [
-    "D",      # docstrings
-    "ANN101", # self type
-    "ANN102", # cls type
-    "COM812", # trailing comma
-    "ISC001", # single line concat
-]
-
-[format]
-quote-style = "single"
-indent-style = "space"
-```
 
 ## Testing Infrastructure
 
@@ -128,27 +71,29 @@ indent-style = "space"
 - **Routes**: See [API Routes](./PYTHON_SNIPPETS.md#api-routes)
 - **Error Handling**: See [Standardized Error Handling](./PYTHON_SNIPPETS.md#standardized-error-handling) (MANDATORY)
 - **Request Tracking**: See [Request ID Middleware](./PYTHON_SNIPPETS.md#request-id-middleware) (MANDATORY)
-- **Files**: `src/project/api/deps.py`, `src/project/api/routes.py`, `src/project/main.py`
+- **Files**: `src/package/api/deps.py`, `src/package/api/routes.py`, `src/package/main.py`
 
 ## Dependency Injection
 
 - **Container**: See [Container Setup](./PYTHON_SNIPPETS.md#container-setup)
 - **Wiring**: See [Wiring FastAPI](./PYTHON_SNIPPETS.md#wiring-fastapi)
 - **Services**: See [Base Service Pattern](./PYTHON_SNIPPETS.md#base-service-pattern)
-- **Files**: `src/project/core/container.py`, `src/project/services/user.py`
+- **Files**: `src/package/core/container.py`, `src/package/services/user.py`
 
 ## Security Basics (MANDATORY)
 
 ### Required Security Components
 
 1. **Security Headers Middleware** (MUST have on ALL APIs)
+
    - See [Security Headers Middleware](./PYTHON_SNIPPETS.md#security-headers-middleware)
-   - Files: `src/project/core/security_headers.py`, `src/project/main.py`
+   - Files: `src/package/core/security_headers.py`, `src/package/main.py`
    - Add to main.py: `app.add_middleware(SecurityHeadersMiddleware)`
 
 2. **Input Validation & Sanitization** (MUST validate ALL inputs)
+
    - See [Enhanced Input Validation](./PYTHON_SNIPPETS.md#enhanced-input-validation)
-   - Files: `src/project/api/schemas.py`
+   - Files: `src/package/api/schemas.py`
    - Use field validators for sanitization
    - Enforce password complexity (12+ chars, uppercase, number, special)
 
@@ -156,21 +101,21 @@ indent-style = "space"
    - **Configuration**: See [DynaConf Setup](./PYTHON_SNIPPETS.md#dynaconf-setup)
    - **Settings File**: See [Settings TOML](./PYTHON_SNIPPETS.md#settings-toml)
    - **Security Service**: See [Security Service](./PYTHON_SNIPPETS.md#security-service)
-   - **Files**: `src/project/core/config.py`, `settings.toml`, `src/project/core/security.py`
+   - **Files**: `src/package/core/config.py`, `settings.toml`, `src/package/core/security.py`
 
 ### .env.example
 
 ```bash
 # Environment selection
-PROJECT_ENV=development  # or production
+MODULE_ENV=development  # or production
 
 # Secrets (production only)
-PROJECT_DATABASE_URL=postgresql+asyncpg://user:pass@localhost/dbname
-PROJECT_SECRET_KEY=your-secret-key-here-generate-with-openssl
+MODULE_DATABASE_URL=postgresql+asyncpg://user:pass@localhost/dbname
+MODULE_SECRET_KEY=your-secret-key-here-generate-with-openssl
 
 # Optional overrides
-PROJECT_DEBUG=false
-PROJECT_PROJECT_NAME=MyProject
+MODULE_DEBUG=false
+MODULE_APP_NAME=MyApp
 ```
 
 ### .gitignore additions
@@ -186,7 +131,7 @@ settings.local.toml
 - **Session Management**: See [Database Session](./PYTHON_SNIPPETS.md#database-session)
 - **Base Model**: See [Base Model](./PYTHON_SNIPPETS.md#base-model)
 - **Advanced Queries**: See [Advanced Queries](./PYTHON_SNIPPETS.md#advanced-queries)
-- **Files**: `src/project/core/database.py`, `src/project/models/user.py`
+- **Files**: `src/package/core/database.py`, `src/package/models/user.py`
 
 ## Commands
 
@@ -208,12 +153,30 @@ ruff check . --fix
 ruff format .
 
 # Run application
-python -m project.main
+python -m module.main
 ```
+
+## Build Automation
+
+See [BUILD_AUTOMATION.md](./BUILD_AUTOMATION.md) for modern build practices.
+
+**Quick start - add to pyproject.toml:**
+```toml
+[tool.uv.scripts]
+dev = "python -m myapp.main --reload"
+test = "pytest -v"
+lint = "ruff check . --fix"
+format = "ruff format ."
+typecheck = "mypy src"
+check = ["lint", "format", "typecheck", "test"]
+```
+
+Then use: `uv run dev`, `uv run test`, `uv run check`
 
 ## Key Principles
 
 ### Security MUST-HAVES
+
 1. **ALWAYS add security headers** to ALL APIs (see Security Basics above)
 2. **ALWAYS validate AND sanitize** ALL user inputs
 3. **ALWAYS use standardized error responses** (see PYTHON_STANDARDS.md)
@@ -222,6 +185,7 @@ python -m project.main
 6. **NEVER expose internal errors** to users
 
 ### Development Standards
+
 7. **Always use factories** for test data
 8. **Always use fixtures** for common setup
 9. **Always validate input** with Pydantic field validators
@@ -245,9 +209,17 @@ All code examples have been moved to [PYTHON_SNIPPETS.md](./PYTHON_SNIPPETS.md) 
 6. **Security**: Services and authentication
 7. **Services**: Business logic patterns
 
-## Next Steps
+## Related Documents
 
-When you need more features, see:
-- [PYTHON_LATER.md](./PYTHON_LATER.md) - Advanced patterns
-- [PYTHON_SNIPPETS.md](./PYTHON_SNIPPETS.md) - All code examples
-- [PYTHON_STACK.md](./PYTHON_STACK.md) - Package reference
+### Essential References
+- **Code Examples**: [PYTHON_SNIPPETS.md](./PYTHON_SNIPPETS.md) - All implementation examples
+- **Package Choices**: [PYTHON_STACK.md](./PYTHON_STACK.md) - Approved packages only
+- **Coding Standards**: [PYTHON_STANDARDS.md](./PYTHON_STANDARDS.md) - Style and conventions
+- **Advanced Features**: [PYTHON_LATER.md](./PYTHON_LATER.md) - When you need more
+
+### Quick Links
+- [pyproject.toml Setup](./PYTHON_SNIPPETS.md#pyprojecttoml-setup)
+- [DynaConf Configuration](./PYTHON_SNIPPETS.md#dynaconf-setup)
+- [Security Middleware](./PYTHON_SNIPPETS.md#security-headers-middleware)
+- [Testing Patterns](./PYTHON_SNIPPETS.md#test-database-fixture)
+- [Error Handling](./PYTHON_SNIPPETS.md#standardized-error-handling)

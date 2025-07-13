@@ -168,52 +168,16 @@ def complex_function(
 ## Output Examples
 
 ### Rich Console:
-```python
-from rich.console import Console
-from rich.table import Table
-from rich.progress import track
 
-console = Console()
-
-# Formatted output
-console.print('[bold green]Processing complete![/bold green]')
-
-# Tables
-table = Table(title='Results')
-table.add_column('Name', style='cyan')
-table.add_column('Value', style='magenta')
-table.add_row('Count', '42')
-console.print(table)
-
-# Progress
-for item in track(items, description='Processing...'):
-    process(item)
-```
+For examples of formatted output, tables, and progress bars, see [Rich Console Examples](./PYTHON_SNIPPETS.md#rich-console-examples).
 
 ### Logging:
-```python
-from loguru import logger
 
-# Configure once in main
-logger.add('app.log', rotation='1 day')
-
-# Use throughout
-logger.info('Starting process')
-logger.error(f'Failed: {error}')
-logger.debug(f'Details: {data}')
-```
+For logging configuration and usage examples, see [Logging Examples](./PYTHON_SNIPPETS.md#logging-examples).
 
 ### Debugging:
-```python
-from icecream import ic
 
-# Debug values
-ic(variable)
-ic(function_call())
-
-# Disable in production
-ic.disable()  # In config based on env
-```
+For debugging with icecream, see [Debug Output Examples](./PYTHON_SNIPPETS.md#debug-output-examples).
 
 ## Type Hints
 
@@ -339,35 +303,9 @@ ALL errors MUST follow this structure:
 - `RESOURCE_*` - Resource errors (not found, conflict)
 - `SYSTEM_*` - System errors (database, external service)
 
-### Example Implementation
+### Implementation
 
-```python
-from datetime import datetime
-from fastapi import Request
-from fastapi.responses import JSONResponse
-
-class APIError(Exception):
-    def __init__(self, status_code: int, error_code: str, detail: str):
-        self.status_code = status_code
-        self.error_code = error_code
-        self.detail = detail
-
-@app.exception_handler(APIError)
-async def api_error_handler(request: Request, exc: APIError):
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            'error': exc.error_code,
-            'detail': exc.detail,
-            'timestamp': datetime.utcnow().isoformat(),
-            'path': request.url.path,
-            'request_id': request.state.request_id
-        }
-    )
-
-# Usage
-raise APIError(400, 'VALIDATION_INVALID_EMAIL', 'Email format is invalid')
-```
+For error handling implementation with APIError class and exception handlers, see [Standardized Error Handling](./PYTHON_SNIPPETS.md#standardized-error-handling).
 
 ## Testing Requirements
 
@@ -401,224 +339,22 @@ raise APIError(400, 'VALIDATION_INVALID_EMAIL', 'Email format is invalid')
 
 ### Test Configuration
 
-```toml
-# pyproject.toml
-[tool.coverage.run]
-source = ["src"]
-omit = ["*/tests/*", "*/migrations/*", "*/admin.py"]
-
-[tool.coverage.report]
-fail_under = 80
-show_missing = true
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-```
+For pytest and coverage configuration, see [Test Configuration](./PYTHON_SNIPPETS.md#test-configuration).
 
 ## Configuration Files
 
-### pyproject.toml Template - Minimal CLI/Library
-```toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "your-project-name"
-version = "0.1.0"
-requires-python = ">=3.12"
-dependencies = [
-    "loguru>=0.7.0",
-    "rich>=13.0.0",
-    "icecream>=2.1.0",
-    "pydantic>=2.10.0",
-    "pydantic-settings>=2.0.0",
-    "typer>=0.9.0",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.2.0",
-    "pytest-cov>=5.0.0",
-    "pytest-asyncio>=0.23.0",
-    "ruff>=0.4.0",
-    "mypy>=1.10.0",
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/your-project"]
-
-[tool.pytest.ini_options]
-pythonpath = ["src"]
-testpaths = ["tests"]
-addopts = [
-    "-v",
-    "--cov=your-project",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-]
-
-[tool.mypy]
-python_version = "3.12"
-strict = true
-pretty = true
-show_error_codes = true
-show_error_context = true
-show_column_numbers = true
-plugins = ["pydantic.mypy"]
-
-[[tool.mypy.overrides]]
-module = ["icecream"]
-ignore_missing_imports = true
-```
-
-### pyproject.toml Template - Full API/Web App
-```toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "your-project-name"
-version = "0.1.0"
-requires-python = ">=3.12"
-dependencies = [
-    "fastapi>=0.115.0",
-    "pydantic>=2.10.0",
-    "dynaconf>=3.2.0",
-    "dependency-injector>=4.41.0",
-    "httpx>=0.27.0",
-    "sqlalchemy>=2.0.0",
-    "asyncpg>=0.29.0",
-    "passlib[bcrypt]>=1.7.4",
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "factory-boy>=3.3.0",
-    "faker>=24.0.0",
-    "loguru>=0.7.0",
-    "rich>=13.0.0",
-    "icecream>=2.1.0",
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/your-project"]
-
-[tool.pytest.ini_options]
-pythonpath = ["src"]
-testpaths = ["tests"]
-addopts = "-xvs --tb=short --strict-markers"
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
-
-[tool.mypy]
-python_version = "3.12"
-strict = true
-mypy_path = "src"
-plugins = ["pydantic.mypy"]
-
-[[tool.mypy.overrides]]
-module = ["icecream"]
-ignore_missing_imports = true
-```
-
-### Ruff Configuration (in pyproject.toml)
-```toml
-[tool.ruff]
-target-version = "py312"
-line-length = 120  # or 88 for black compatibility
-src = ["src", "tests"]
-
-[tool.ruff.lint]
-select = ["ALL"]
-ignore = [
-    "D",      # docstrings (we'll use Google style selectively)
-    "COM812", # trailing comma
-    "ISC001", # single line concat
-    "S101",   # Use of assert detected (needed for tests)
-    "TD",     # todos
-    "FIX",    # fixme
-    "ERA",    # eradicate
-    "PLR0913", # too many arguments
-    "PLR2004", # magic value
-    "EM101",  # Exception string literals (conflicts with our rule)
-    "EM102",  # Exception f-string literals
-    "TRY003", # Long exception messages
-]
-
-[tool.ruff.format]
-quote-style = "single"
-indent-style = "space"
-```
+For complete configuration templates:
+- **pyproject.toml (Minimal)**: See [pyproject.toml Setup](./PYTHON_SNIPPETS.md#pyprojecttoml-setup)
+- **pyproject.toml (Full API)**: See [pyproject.toml - Full API](./PYTHON_SNIPPETS.md#pyprojecttoml-full-api)
+- **Ruff Configuration**: See [Ruff Configuration](./PYTHON_SNIPPETS.md#rufftoml)
 
 ## Verification Commands
-```bash
-# Run from project root
-ruff check . --fix && ruff format .
-mypy . --strict
-pytest --cov=src --cov-report=term-missing
-bandit -r src/  # Security checks
-```
+
+For verification commands and setup, see [Verification Commands](./PYTHON_SNIPPETS.md#verification-commands).
 
 ## Test File Template
 
-```python
-"""Tests for module_name module."""
-from __future__ import annotations
-
-# Standard library
-from typing import Any
-from unittest.mock import MagicMock, patch
-
-# Third-party
-import pytest
-from loguru import logger
-
-# Local
-from myproject.module_name import function_to_test
-
-
-class TestFunctionName:
-    """Test cases for function_name."""
-
-    def test_success_case(self) -> None:
-        """Test function succeeds with valid input."""
-        result = function_to_test('valid_input')
-        assert result == expected_value
-        
-    def test_handles_exception(self) -> None:
-        """Test function handles exceptions properly."""
-        with pytest.raises(ValueError, match='Expected error'):
-            function_to_test('invalid_input')
-            
-    def test_with_mock(self) -> None:
-        """Test function with mocked dependencies."""
-        with (
-            patch('myproject.module_name.dependency') as mock_dep,
-            patch('myproject.module_name.logger.info') as mock_log,
-        ):
-            mock_dep.return_value = 'mocked_value'
-            result = function_to_test('input')
-            
-            mock_dep.assert_called_once_with('input')
-            mock_log.assert_called()
-            assert result == 'expected'
-            
-    @pytest.fixture
-    def sample_data(self) -> dict[str, Any]:
-        """Provide sample test data."""
-        return {
-            'key': 'value',
-            'number': 42,
-        }
-        
-    def test_with_fixture(self, sample_data: dict[str, Any]) -> None:
-        """Test using fixture data."""
-        result = function_to_test(sample_data)
-        assert result['processed'] is True
-```
+For complete test file templates and patterns, see [Test File Template](./PYTHON_SNIPPETS.md#test-file-template).
 
 ## Common Pitfalls to Avoid
 
@@ -627,5 +363,20 @@ class TestFunctionName:
 3. **Test mocking**: Use combined `with` statements for multiple patches
 4. **Import unused variables**: Remove or use underscore prefix for intentionally unused
 5. **Type annotations**: Include for ALL function parameters and returns, including test fixtures
+
+## Related Documents
+
+### Essential References
+- **Project Setup**: [PYTHON_MUST.md](./PYTHON_MUST.md) - Start here for new projects
+- **Code Examples**: [PYTHON_SNIPPETS.md](./PYTHON_SNIPPETS.md) - All implementation examples
+- **Package Choices**: [PYTHON_STACK.md](./PYTHON_STACK.md) - Approved packages only
+- **Advanced Features**: [PYTHON_LATER.md](./PYTHON_LATER.md) - When you need more
+
+### Quick Links to Examples
+- [Configuration Templates](./PYTHON_SNIPPETS.md#configuration)
+- [Error Handling Implementation](./PYTHON_SNIPPETS.md#standardized-error-handling)
+- [Test Patterns](./PYTHON_SNIPPETS.md#test-file-template)
+- [Security Middleware](./PYTHON_SNIPPETS.md#security-headers-middleware)
+- [Logging Setup](./PYTHON_SNIPPETS.md#logging-examples)
 
 ## That's it. Security first, errors standardized, tests comprehensive.

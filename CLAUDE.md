@@ -11,6 +11,7 @@ This is the central standards repository. When working on ANY project, refer to 
 ### By Technology Stack
 - **Python Projects** → [PYTHON_STANDARDS.md](./PYTHON_STANDARDS.md) + [PYTHON_STACK.md](./PYTHON_STACK.md) + [PYTHON_SNIPPETS.md](./PYTHON_SNIPPETS.md)
 - **Next.js/React Projects** → [NEXTJS_STANDARDS.md](./NEXTJS_STANDARDS.md) + [NEXTJS_STACK.md](./NEXTJS_STACK.md)
+- **Build Automation** → [BUILD_AUTOMATION.md](./BUILD_AUTOMATION.md)
 - **Infrastructure Setup** → [INFRA_STACK.md](./INFRA_STACK.md)
 - **UX/UI Design** → [UX_PRINCIPLES.md](./UX_PRINCIPLES.md)
 - **Custom Commands** → [CLAUDE_COMMANDS.md](./CLAUDE_COMMANDS.md)
