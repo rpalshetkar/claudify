@@ -50,12 +50,13 @@ XSettings is a configuration management system built on top of DynaConf and XObj
 ```python
 from __future__ import annotations
 
-from typing import Literal, Any
-from pydantic import Field, field_validator, BaseModel
-from dynaconf import Dynaconf
 import os
+from typing import Any, Literal
 
-from core.base import XObjPrototype
+from dynaconf import Dynaconf
+from pydantic import BaseModel, Field, field_validator
+
+from features.core.base import XObjPrototype
 
 
 class DatabaseSettings(BaseModel):
@@ -146,12 +147,13 @@ class XSettings(XObjPrototype):
 
     def __init__(
         self,
+        *,
         env: str | None = None,
         loading_order: list[str] | None = None,
         validation_mode: Literal['eager', 'lazy', 'hybrid'] = 'hybrid',
         load_envs: list[str] | None = None,
-        **kwargs
-    ):
+        **kwargs: Any,
+    ) -> None:
         """
         Initialize settings with configurable options.
 
@@ -202,6 +204,60 @@ class XSettings(XObjPrototype):
     def get_ns(self) -> str:
         """Return namespace for settings - required by XObjPrototype"""
         return "settings"
+```
+
+## Exception Hierarchy
+
+Following the architectural decision for domain-specific exceptions:
+
+```python
+class XSettingsError(Exception):
+    """Base exception for all XSettings errors"""
+    
+    def __init__(self, message: str, details: dict | None = None) -> None:
+        super().__init__(message)
+        self.details = details or {}
+
+class XSettingsConfigurationError(XSettingsError):
+    """Configuration-related errors"""
+    pass
+
+class XSettingsValidationError(XSettingsError):
+    """Settings validation errors"""
+    pass
+
+class XSettingsEnvironmentError(XSettingsError):
+    """Environment loading errors"""
+    pass
+
+class XSettingsLoaderError(XSettingsError):
+    """Loader configuration errors"""
+    pass
+```
+
+## Metadata Usage Example
+
+XSettings inherits metadata management from XObjPrototype with flat dictionary storage:
+
+```python
+# Create settings instance
+settings = XSettings()
+
+# Add metadata using flat dictionary pattern
+settings.add_metadata(
+    loaded_at=datetime.now(),
+    config_source="settings.toml",
+    environment="production",
+    validation_mode="hybrid"
+)
+
+# Access metadata
+load_time = settings.get_metadata("loaded_at")
+source = settings.get_metadata("config_source", "unknown")
+
+# Metadata is stored as simple key-value pairs
+print(settings._metadata)
+# {'loaded_at': datetime(...), 'config_source': 'settings.toml', ...}
 ```
 
 ### Loading Order Configuration
@@ -269,7 +325,8 @@ def _load_nested_settings(self) -> None:
         self.security = SecuritySettings(**self._dynaconf.security.to_dict())
     else:
         # Security is required, so we need to fail gracefully
-        raise ValueError("Security settings are required but not found in configuration")
+        msg = 'Security settings are required but not found in configuration'
+        raise XSettingsConfigurationError(msg)
 
     # Server settings
     if hasattr(self._dynaconf, 'server'):
@@ -751,7 +808,7 @@ class TestXSettings:
 
     def test_security_required(self):
         # Security settings are required
-        with pytest.raises(ValueError, match="Security settings are required"):
+        with pytest.raises(XSettingsConfigurationError, match="Security settings are required"):
             # Create a mock scenario where security is missing
             settings = XSettings()
             settings._dynaconf = type('MockDynaconf', (), {})()
@@ -876,3 +933,13 @@ The design uses nested models to organize settings into logical categories (data
 - Clear separation of concerns
 - Easy validation of complex configurations
 - Intuitive access patterns that match the configuration structure
+
+## Architectural Alignment
+
+XSettings aligns with the core architectural decisions:
+
+1. **Domain-Specific Exceptions**: Uses XSettingsError hierarchy for clear error handling
+2. **Flat Metadata Storage**: Inherits flat dictionary metadata pattern from XObjPrototype
+3. **Manual Registration**: Part of the manual startup sequence (Settings → Resources → Inspector → Repos → Models)
+4. **Namespace Integration**: Implements get_ns() for namespace registration as "settings"
+5. **No Schema Discovery**: Pure configuration management, delegates no analysis to other components

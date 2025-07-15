@@ -46,100 +46,126 @@ XResource is a unified abstraction layer for managing various types of data conn
 ## Architecture
 
 ```python
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Type, TypeVar
+from datetime import datetime
+from typing import Any, TypeVar
+
 from pydantic import BaseModel, Field
-from src.server.core.xobj_prototype import XObjPrototype
+
+from features.core.base import XObjPrototype
 
 T = TypeVar('T', bound='XResource')
 
+
 class ResourceMetadata(BaseModel):
-    """Base metadata for all resources"""
+    """Base metadata for all resources."""
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     tags: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
 class XResource(XObjPrototype, ABC):
-    """Abstract base class for all resources"""
+    """Abstract base class for all resources."""
 
     metadata: ResourceMetadata
-    connection_params: Dict[str, Any]
-    _connection: Optional[Any] = None
+    connection_params: dict[str, Any]
+    _connection: Any | None = None
 
     @abstractmethod
     async def connect(self) -> None:
-        """Establish connection to the resource"""
+        """Establish connection to the resource."""
         pass
 
     @abstractmethod
     async def disconnect(self) -> None:
-        """Close connection to the resource"""
+        """Close connection to the resource."""
         pass
 
     @abstractmethod
     async def validate_connection(self) -> bool:
-        """Validate if connection is active and healthy"""
+        """Validate if connection is active and healthy."""
         pass
 
     @abstractmethod
-    def get_metadata(self) -> Dict[str, Any]:
-        """Return resource-specific metadata"""
+    def get_metadata(self) -> dict[str, Any]:
+        """Return resource-specific metadata."""
         pass
 
     # Schema discovery removed - delegated to XInspector
     # See XINSPECTOR.md for schema discovery implementation
 
     @abstractmethod
-    async def list_collections_or_tables(self) -> List[str]:
-        """List available collections/tables in the resource"""
+    async def list_collections_or_tables(self) -> list[str]:
+        """List available collections/tables in the resource."""
         pass
 
 class FileResource(XResource):
-    """Base class for file-based resources"""
+    """Base class for file-based resources."""
+    
+    def get_ns(self) -> str:
+        return 'file_resources'
     file_path: str
     encoding: str = "utf-8"
 
 class DatabaseResource(XResource):
     """Base class for database resources with internal pooling"""
+    
+    def get_ns(self) -> str:
+        return 'database_resources'
+        
     connection_string: str
     pool_size: int = 10
     _pool: Optional[Any] = None  # Each DB type manages its own pool
 
 class NetworkResource(XResource):
-    """Base class for network resources"""
+    """Base class for network resources."""
     endpoint: str
     timeout: int = 30
-    auth_params: Optional[Dict[str, Any]] = None
+    auth_params: dict[str, Any] | None = None
+    
+    def get_ns(self) -> str:
+        return 'network_resources'
+
 
 class EventStreamResource(XResource):
-    """Base class for event streaming resources"""
-    connection_params: Dict[str, Any]
-    event_handlers: Dict[str, Callable] = Field(default_factory=dict)
+    """Base class for event streaming resources."""
+    connection_params: dict[str, Any]
+    event_handlers: dict[str, Callable] = Field(default_factory=dict)
     reconnect_interval: int = 5  # seconds
     max_reconnect_attempts: int = 10
-    _active_subscriptions: Set[str] = Field(default_factory=set)
+    _active_subscriptions: set[str] = Field(default_factory=set)
+    
+    def get_ns(self) -> str:
+        return 'event_stream_resources'
 ```
 
 ## Resource Factory
 
 ```python
-class ResourceFactory:
-    """Factory for creating resource instances"""
+from __future__ import annotations
 
-    _registry: Dict[str, Type[XResource]] = {}
+from typing import Any, Type
+
+
+class ResourceFactory:
+    """Factory for creating resource instances."""
+
+    _registry: dict[str, Type[XResource]] = {}
 
     @classmethod
     def register(cls, resource_type: str, resource_class: Type[XResource]) -> None:
-        """Register a resource type"""
+        """Register a resource type."""
         cls._registry[resource_type] = resource_class
 
     @classmethod
-    def create(cls, resource_type: str, **kwargs) -> XResource:
-        """Create a resource instance"""
+    def create(cls, resource_type: str, **kwargs: Any) -> XResource:
+        """Create a resource instance."""
         if resource_type not in cls._registry:
-            raise ValueError(f"Unknown resource type: {resource_type}")
+            msg = f'Unknown resource type: {resource_type}'
+            raise ValueError(msg)
 
         resource_class = cls._registry[resource_type]
         return resource_class(**kwargs)
@@ -343,7 +369,7 @@ class MongoDBResource(DatabaseResource):
         """Get specific collection"""
         return self._db[name]
 
-    def get_metadata(self) -> Dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         """Return MongoDB-specific metadata"""
         return {
             "database": self.database,
@@ -356,11 +382,11 @@ class MongoDBResource(DatabaseResource):
     # inspector = XInspector(mongo_resource)
     # schema = await inspector.discover_schema("users")
 
-    async def list_collections_or_tables(self) -> List[str]:
+    async def list_collections_or_tables(self) -> list[str]:
         """List all collections in the MongoDB database"""
-        return await self._db.list_collections()
+        return await self._db.list_collection_names()
 
-    def get_pool_stats(self) -> Dict[str, Any]:
+    def get_pool_stats(self) -> dict[str, Any]:
         """Get connection pool statistics"""
         if not self._client:
             return {"status": "not_connected"}
@@ -404,12 +430,12 @@ class CSVResource(FileResource):
         """Check if file exists and is readable"""
         return self._connection and self._connection.exists()
 
-    async def read(self) -> list[Dict[str, Any]]:
+    async def read(self) -> list[dict[str, Any]]:
         """Read CSV data"""
         # Implementation would use csv.DictReader or pandas
         pass
 
-    def get_metadata(self) -> Dict[str, Any]:
+    def get_metadata(self) -> dict[str, Any]:
         """Return CSV-specific metadata"""
         return {
             "file_path": self.file_path,
@@ -424,11 +450,11 @@ class CSVResource(FileResource):
     # inspector = XInspector(csv_resource)
     # schema = await inspector.discover_schema()
 
-    async def list_collections_or_tables(self) -> List[str]:
+    async def list_collections_or_tables(self) -> list[str]:
         """For CSV, return the filename as the single 'table'"""
         return [Path(self.file_path).stem]
 
-    async def read_stream(self, chunk_size: int = 1000) -> AsyncIterator[List[Dict[str, Any]]]:
+    async def read_stream(self, chunk_size: int = 1000) -> AsyncIterator[list[dict[str, Any]]]:
         """Stream CSV data in chunks for memory efficiency"""
         import csv
         import aiofiles

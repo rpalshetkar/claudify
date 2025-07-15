@@ -4,7 +4,7 @@
 
 XObjPrototype is a foundational abstraction that extends Pydantic's BaseModel to provide enhanced validation, namespace support, and metadata management capabilities. It serves as an **abstract base class** for all data models in the system, ensuring consistent validation patterns and integration with the namespace architecture.
 
-**Important**: XObjPrototype cannot be instantiated directly - it must be subclassed. The implementation uses strict ABC (Abstract Base Class) pattern with runtime enforcement in `__init__` to prevent direct instantiation, raising `InstantiationError` if attempted.
+**Important**: XObjPrototype cannot be instantiated directly - it must be subclassed. The implementation uses strict ABC (Abstract Base Class) pattern with runtime enforcement in `__init__` to prevent direct instantiation, raising `TypeError` if attempted directly.
 
 ## Core Features
 
@@ -51,11 +51,14 @@ XObjPrototype is a foundational abstraction that extends Pydantic's BaseModel to
 ### Basic Model Definition
 
 ```python
-from server.core.base import XObjPrototype, FuzzyField
+from __future__ import annotations
+
 from pydantic import Field
 
+from features.core.base import XObjPrototype, FuzzyField
+
 # This will raise an error - cannot instantiate directly
-# obj = XObjPrototype()  # InstantiationError: Cannot instantiate XObjPrototype directly
+# obj = XObjPrototype()  # TypeError: Can't instantiate abstract class XObjPrototype
 
 # Correct usage - must subclass
 class User(XObjPrototype):
@@ -71,7 +74,7 @@ class User(XObjPrototype):
     def get_collection(self) -> str:
         return "user_profiles"
     
-    def get_indexes(self) -> List[List[str]]:
+    def get_indexes(self) -> list[list[str]]:
         return [
             ["email"],  # Single field index
             ["name", "age"],  # Composite index
@@ -86,16 +89,23 @@ print(user.get_metadata("created_by"))  # "admin"
 ### Complete Model with All Features
 
 ```python
-from decimal import Decimal
+from __future__ import annotations
+
 from datetime import datetime
-from typing import List
+from decimal import Decimal
+
+from pydantic import Field
+
+from features.core.base import XObjPrototype, FuzzyField
+from features.models import OrderItem
+
 
 class Order(XObjPrototype):
     id: str = Field(description="Order ID")
     user_id: str = Field(description="User reference")
     customer_name: str = FuzzyField(description="Customer name for search")
     customer_email: str = FuzzyField(description="Customer email")
-    items: List[OrderItem] = Field(default_factory=list)
+    items: list[OrderItem] = Field(default_factory=list)
     total: Decimal = Field(decimal_places=2)
     status: str = Field(default="pending")
     internal_notes: str = Field(default="", description="Not searchable")
@@ -106,7 +116,7 @@ class Order(XObjPrototype):
     def get_collection(self) -> str:
         return "order_history"
     
-    def get_indexes(self) -> List[List[str]]:
+    def get_indexes(self) -> list[list[str]]:
         return [
             ["id"],
             ["user_id", "created_at"],
@@ -139,6 +149,16 @@ order_path = registrar.register_model(order)
 ### Error Handling Example
 
 ```python
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import Field
+
+from features.core.base import XObjPrototype
+from features.core.errors import ValidationError
+
+
 class APIConfiguration(XObjPrototype):
     endpoint: str = Field(description="API endpoint URL")
     api_key: str = Field(description="API key", repr=False)  # Hidden in repr
@@ -148,19 +168,21 @@ class APIConfiguration(XObjPrototype):
         return "config.api"
     
     def validate_endpoint(self) -> None:
-        """Custom validation with specific exceptions"""
+        """Custom validation with specific exceptions."""
         if not self.endpoint.startswith(('http://', 'https://')):
+            msg = 'Endpoint must start with http:// or https://'
             raise ValidationError(
-                "Endpoint must start with http:// or https://",
-                details={"endpoint": self.endpoint}
+                msg,
+                details={'endpoint': self.endpoint}
             )
     
     def set_api_key(self, key: str) -> None:
-        """Set API key with validation"""
+        """Set API key with validation."""
         if len(key) < 32:
+            msg = 'API key must be at least 32 characters'
             raise ValidationError(
-                "API key must be at least 32 characters",
-                details={"key_length": len(key)}
+                msg,
+                details={'key_length': len(key)}
             )
         self.api_key = key
         self.add_metadata(api_key_updated=datetime.now())
@@ -181,9 +203,15 @@ except ValidationError as e:
 ### Abstract Base Implementation
 
 ```python
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from typing import Any
+
 from pydantic import BaseModel, Field
-from typing import Any, Dict, List, Optional
+
+from features.core.errors import InstantiationError
+
 
 class XObjPrototype(BaseModel, ABC):
     """
@@ -197,14 +225,13 @@ class XObjPrototype(BaseModel, ABC):
     """
     
     # Metadata storage - flat dictionary (no schema constraints)
-    _metadata: Dict[str, Any] = Field(default_factory=dict, exclude=True)
+    _metadata: dict[str, Any] = Field(default_factory=dict, exclude=True)
     
     def __init__(self, **data: Any) -> None:
-        """Enforce abstract class - cannot instantiate directly"""
+        """Enforce abstract class - cannot instantiate directly."""
         if type(self) is XObjPrototype:
-            raise InstantiationError(
-                "Cannot instantiate XObjPrototype directly. Create a subclass."
-            )
+            msg = 'Cannot instantiate XObjPrototype directly. Create a subclass.'
+            raise TypeError(msg)
         super().__init__(**data)
     
     # Required abstract method - must be implemented by subclasses
@@ -215,100 +242,107 @@ class XObjPrototype(BaseModel, ABC):
     
     # Optional methods with sensible defaults
     def get_collection(self) -> str:
-        """Return the collection/table name"""
-        return f"{self.get_ns()}_{self.__class__.__name__.lower()}"
+        """Return the collection/table name."""
+        return f'{self.get_ns()}_{self.__class__.__name__.lower()}'
     
-    def get_indexes(self) -> List[List[str]]:
-        """Return index definitions"""
+    def get_indexes(self) -> list[list[str]]:
+        """Return index definitions."""
         return []  # No indexes by default
     
     # Metadata helper methods
-    def add_metadata(self, **kwargs) -> "XObjPrototype":
-        """Add multiple metadata entries"""
+    def add_metadata(self, **kwargs) -> XObjPrototype:
+        """Add multiple metadata entries."""
         self._metadata.update(kwargs)
         return self
     
     def get_metadata(self, key: str, default: Any = None) -> Any:
-        """Get metadata value with optional default"""
+        """Get metadata value with optional default."""
         return self._metadata.get(key, default)
     
     # Fuzzy search support
-    def get_fuzzy_fields(self) -> List[str]:
-        """Return list of fuzzy searchable field names"""
+    def get_fuzzy_fields(self) -> list[str]:
+        """Return list of fuzzy searchable field names."""
         return [
             name for name, field in self.model_fields.items()
             if field.json_schema_extra and 
-            field.json_schema_extra.get("fuzzy_searchable")
+            field.json_schema_extra.get('fuzzy_searchable')
         ]
     
     def get_fuzzy_text(self) -> str:
-        """Get concatenated fuzzy searchable text"""
+        """Get concatenated fuzzy searchable text."""
         fuzzy_fields = self.get_fuzzy_fields()
         if not fuzzy_fields:
-            return ""
-        values = [str(getattr(self, field, "")) for field in fuzzy_fields]
-        return " ".join(filter(None, values))
+            return ''
+        values = [str(getattr(self, field, '')) for field in fuzzy_fields]
+        return ' '.join(filter(None, values))
     
     # Namespace registration support
-    def get_namespace_path(self, prefix: str = "ns") -> str:
-        """Get the namespace path for this instance"""
+    def get_namespace_path(self, prefix: str = 'ns') -> str:
+        """Get the namespace path for this instance."""
         instance_id = getattr(self, 'id', 'unnamed')
-        return f"{prefix}.{self.get_ns()}.{instance_id}"
+        return f'{prefix}.{self.get_ns()}.{instance_id}'
     
-    def get_registration_data(self) -> Dict[str, Any]:
-        """Get data needed for namespace registration"""
+    def get_registration_data(self) -> dict[str, Any]:
+        """Get data needed for namespace registration."""
         instance_id = getattr(self, 'id', '')
         return {
-            "path": self.get_namespace_path(),
-            "fuzzy_path": f"ns.fuzzy.{self.get_ns()}.{instance_id}",
-            "fuzzy_text": self.get_fuzzy_text(),
-            "instance": self
+            'path': self.get_namespace_path(),
+            'fuzzy_path': f'ns.fuzzy.{self.get_ns()}.{instance_id}',
+            'fuzzy_text': self.get_fuzzy_text(),
+            'instance': self
         }
 ```
 
 ## Exception Hierarchy
 
 ```python
-# Base exception with details support
+from __future__ import annotations
+
+
 class XObjPrototypeError(Exception):
-    """Base exception for all XObjPrototype errors"""
-    def __init__(self, message: str, details: dict = None):
+    """Base exception for all XObjPrototype errors."""
+    
+    def __init__(self, message: str, details: dict | None = None) -> None:
         super().__init__(message)
         self.details = details or {}
 
-# Specific exception types
+
 class InstantiationError(XObjPrototypeError):
-    """Cannot instantiate abstract class"""
-    pass
+    """Cannot instantiate abstract class."""
+    
 
 class ValidationError(XObjPrototypeError):
-    """Validation failed"""
-    pass
+    """Validation failed."""
+    
 
 class MetadataError(XObjPrototypeError):
-    """Metadata operation failed"""
-    pass
+    """Metadata operation failed."""
+    
 
 class NamespaceError(XObjPrototypeError):
-    """Namespace resolution failed"""
-    pass
+    """Namespace resolution failed."""
+    
 
 class SchemaError(XObjPrototypeError):
-    """Schema-related error"""
-    pass
+    """Schema-related error."""
+    
 
 class FuzzySearchError(XObjPrototypeError):
-    """Fuzzy search configuration error"""
-    pass
+    """Fuzzy search configuration error."""
 ```
 
 ## Helper Functions
 
 ```python
+from __future__ import annotations
+
+from typing import Any
+
 from pydantic import Field
 
-def FuzzyField(**kwargs):
-    """Create a field that's included in fuzzy search"""
+
+def FuzzyField(**kwargs: Any) -> Field:
+    """Create a field that's included in fuzzy search."""
     kwargs.setdefault('json_schema_extra', {})['fuzzy_searchable'] = True
     return Field(**kwargs)
 ```
@@ -316,27 +350,33 @@ def FuzzyField(**kwargs):
 ## Namespace Registration
 
 ```python
+from __future__ import annotations
+
+from features.core.cache import CacheManager
+from features.core.base import XObjPrototype
+
+
 class NamespaceRegistrar:
-    """Handles model registration in namespace"""
+    """Handles model registration in namespace."""
     
-    def __init__(self, cache_manager: CacheManager):
+    def __init__(self, cache_manager: CacheManager) -> None:
         self.cache = cache_manager
     
     def register_model(self, model: XObjPrototype) -> str:
-        """Register a model instance in namespace"""
+        """Register a model instance in namespace."""
         data = model.get_registration_data()
         
         # Register main instance
-        self.cache.register_ns(data["path"], data["instance"])
+        self.cache.register_ns(data['path'], data['instance'])
         
         # Register fuzzy search if applicable
-        if data["fuzzy_text"]:
-            self.cache.register_ns(data["fuzzy_path"], data["fuzzy_text"])
+        if data['fuzzy_text']:
+            self.cache.register_ns(data['fuzzy_path'], data['fuzzy_text'])
         
-        return data["path"]
+        return data['path']
     
-    def register_models(self, models: List[XObjPrototype]) -> List[str]:
-        """Bulk register multiple models"""
+    def register_models(self, models: list[XObjPrototype]) -> list[str]:
+        """Bulk register multiple models."""
         return [self.register_model(model) for model in models]
 ```
 
@@ -488,7 +528,7 @@ pydantic.BaseModel
 ```python
 def test_cannot_instantiate_directly():
     """Test XObjPrototype cannot be instantiated"""
-    with pytest.raises(InstantiationError, match="Cannot instantiate XObjPrototype directly"):
+    with pytest.raises(TypeError, match="Cannot instantiate XObjPrototype directly"):
         XObjPrototype()
 
 def test_subclass_without_get_ns():

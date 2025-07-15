@@ -137,3 +137,8 @@ Remember: This is a standards-driven project. Always refer to parent claudify st
 ## Communication Guidelines
 
 - Always ask one question at a time and explain to me choices and pros and cons with approaches and usage to help me make decisions
+
+## Performance and Interaction Guidelines
+
+- Given frequent timeouts going forward, break tasks into small subtasks and act on each
+- When in code generation mode, always refer to standards
