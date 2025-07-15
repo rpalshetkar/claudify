@@ -25,7 +25,7 @@ graph TB
     end
     
     subgraph "Registry Layer"
-        XModels[XModels<br/>- Model Registry<br/>- UI Widget Detection<br/>- Permissions<br/>- Audit Logging]
+        XRegistry[XRegistry<br/>- Model Registry<br/>- UI Widget Detection<br/>- Permissions<br/>- Audit Logging]
     end
     
     subgraph "Data Access Layer"
@@ -42,13 +42,13 @@ graph TB
     XInspector --> XResource
     XRepo --> XResource
     XRepo --> XObjPrototype
-    XModels --> XObjPrototype
+    XRegistry --> XObjPrototype
     CacheManager --> XRepo
     
     %% Data Flow
-    XInspector -.->|Generates Models| XModels
-    XModels -.->|Registers Models| CacheManager
-    XRepo -.->|Uses Models| XModels
+    XInspector -.->|Generates Models| XRegistry
+    XRegistry -.->|Registers Models| CacheManager
+    XRepo -.->|Uses Models| XRegistry
     XInspector -.->|Analyzes via| XResource
 ```
 
@@ -90,7 +90,7 @@ graph TB
   - Preview and sampling capabilities
 - **Does NOT**: Register models or handle runtime operations
 
-### 5. **XModels** (Model Registry)
+### 5. **XRegistry** (Model Registry)
 - **Purpose**: Runtime model management and metadata
 - **Responsibilities**:
   - Model registration (not generation)
@@ -125,7 +125,7 @@ sequenceDiagram
     participant User
     participant XResource
     participant XInspector
-    participant XModels
+    participant XRegistry
     participant CacheManager
     
     User->>XResource: Create & Connect
@@ -133,8 +133,8 @@ sequenceDiagram
     XInspector->>XResource: Analyze Data
     XInspector->>XInspector: Generate Model
     XInspector-->>User: Return Model Class
-    User->>XModels: Register Model
-    XModels->>CacheManager: Store in Namespace
+    User->>XRegistry: Register Model
+    XRegistry->>CacheManager: Store in Namespace
 ```
 
 ### Data Access Flow
@@ -143,7 +143,7 @@ sequenceDiagram
     participant User
     participant XRepo
     participant XResource
-    participant XModels
+    participant XRegistry
     participant CacheManager
     
     User->>XRepo: Query Request
@@ -180,7 +180,7 @@ cache.register_ns("ns.inspector.db", inspector)
 # 4. Generate Models (via Inspector)
 UserModel = await inspector.generate_model("users")
 
-# 5. Register Models (via XModels)
+# 5. Register Models (via XRegistry)
 model_registry.register(UserModel)
 cache.register_ns("ns.models.User", UserModel)
 
@@ -195,9 +195,9 @@ cache.register_ns("ns.repos.users", user_repo)
 
 ## Integration Points
 
-### XInspector → XModels
+### XInspector → XRegistry
 - Inspector generates model classes
-- Models registry stores them
+- Registry stores them
 - Clear handoff point
 
 ### XResource → XInspector

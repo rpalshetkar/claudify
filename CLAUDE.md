@@ -138,7 +138,7 @@ Key architectural components defined in [features/XARCH.md](./features/XARCH.md)
 - **XResource**: Connection factory for multiple data sources
 - **XInspector**: Schema discovery and model generation
 - **XRepository**: Data access with ACL and audit
-- **XModels**: Dynamic model registry with UI mappings
+- **XRegistry**: Dynamic model registry with UI mappings
 
 ## 🔒 Security Requirements
 
