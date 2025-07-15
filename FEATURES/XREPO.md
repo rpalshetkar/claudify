@@ -187,15 +187,6 @@ class XRepo(XObjPrototype, Generic[T], ABC):
         """Bulk delete records, returns count of deleted records"""
         pass
 
-    @abstractmethod
-    async def inspect_schema(self) -> Dict[str, Any]:
-        """Inspect and return schema information"""
-        pass
-
-    @abstractmethod
-    async def inspect_collection(self) -> Dict[str, Any]:
-        """Inspect collection/table metadata including indexes, constraints, size"""
-        pass
 
     @abstractmethod
     async def get_statistics(self) -> RepoStats:
@@ -340,13 +331,9 @@ class XRepoFactory:
             return cls._schema_from_model(inputs['model_class'])
 
         elif inputs.get('resource') and not inputs.get('sources'):
-            # Schema from XInspector analysis
-            resource = inputs['resource']
-            await cls._ensure_connected(resource)
-            # Note: In practice, schema should be provided by XInspector
-            # This is a fallback for factory-level schema extraction
-            inspector = XInspector(resource)
-            return await inspector.discover_schema()
+            # Schema should be provided by XInspector
+            # Repo does not perform schema discovery
+            raise ValueError("Schema must be provided. Use XInspector to discover schemas.")
 
         elif inputs.get('data'):
             # Schema from data analysis
@@ -444,9 +431,9 @@ class XRepoFactory:
         raise ValueError(f"No strategy found for inputs: {list(inputs.keys())}")
 ```
 
-## Model Generation - Delegated to XInspector
+## Model Integration - Delegated to XInspector
 
-Model generation from schemas has been moved to XInspector to maintain clear separation of concerns. XInspector handles all schema discovery and model generation, while Repo focuses purely on data access patterns. The integration follows a two-step process: (1) Inspector generates models, (2) Models registry registers them for runtime use. For model generation details, see [XINSPECTOR.md](./XINSPECTOR.md).
+Model generation from schemas is handled by XInspector to maintain clear separation of concerns. XInspector handles all schema discovery and model generation, while Repo focuses purely on data access patterns. The integration follows a two-step process: (1) Inspector generates models, (2) Models registry registers them for runtime use. For model generation details, see [XINSPECTOR.md](./XINSPECTOR.md).
 
 ### Integration with XInspector
 
@@ -530,9 +517,10 @@ class XRepoFactory:
         if not await resource.validate_connection():
             await resource.connect()
 
-        # Use XInspector for schema discovery
-        inspector = XInspector(resource)
-        schema = await inspector.discover_schema(collection)
+        # Schema must be provided - discovery handled by XInspector
+        if not kwargs.get('schema'):
+            raise ValueError("Schema must be provided. Use XInspector to discover schemas.")
+        schema = kwargs['schema']
 
         # Determine repo type with smart defaults
         if materialized is None:
@@ -565,18 +553,15 @@ class XRepoFactory:
     ) -> 'XRepo':
         """Create view repo from multiple resources using pre-generated model"""
 
-        # Use XInspector to discover schemas from all resources
-        schemas = {}
+        # Schemas must be provided - discovery handled by XInspector
+        if 'schemas' not in kwargs:
+            raise ValueError("Schemas must be provided. Use XInspector to discover schemas.")
+        schemas = kwargs['schemas']
         source_repos = []
         
         for resource, collection_table in resources:
             if not await resource.validate_connection():
                 await resource.connect()
-                
-            # Use XInspector for schema discovery
-            inspector = XInspector(resource)
-            schema = await inspector.discover_schema(collection_table)
-            schemas[f"{resource.metadata.name}.{collection_table}"] = schema
             
             # Create source repo (assuming models exist in registry)
             source_repo = await cls.create_from_resource(
@@ -619,7 +604,6 @@ class XRepoFactory:
             model_class=result_model_class
         )
 
-    # Model name inference removed - handled by XInspector during model generation
 
     @classmethod
     def _merge_schemas(cls, schemas: Dict[str, Dict[str, Any]], join_config: Dict[str, Any]) -> Dict[str, Any]:
@@ -684,36 +668,50 @@ class XRepoFactory:
 ### Usage Examples - Resource-Based Creation
 
 ```python
-# Example 1: Simple repo from MongoDB collection
+# Example 1: Simple repo from MongoDB collection (with pre-discovered schema)
 mongo_resource = ResourceFactory.create("mongodb", connection_string="mongodb://localhost/app")
+
+# Use XInspector to discover schema
+inspector = XInspector(mongo_resource)
+schema = await inspector.discover_schema("users")
+User = await inspector.generate_model("users")
+
 user_repo = await XRepoFactory.create_from_resource(
     resource=mongo_resource,
-    collection="users"
-)
-
-# Schema-aware repo (works with Dict objects)
-users = await user_repo.list({})  # Returns List[Dict[str, Any]]
-
-# Example 2: Typed repo with auto-generated model
-user_repo_typed = await XRepoFactory.create_from_resource(
-    resource=mongo_resource,
+    model_class=User,
     collection="users",
-    auto_generate_model=True,
-    model_name="User"
+    schema=schema
 )
 
 # Typed repo (returns proper User instances)
-users_typed = await user_repo_typed.list({})  # Returns List[User]
+users = await user_repo.list({})  # Returns List[User]
 
-# Example 3: CSV-based repo
+# Example 2: CSV-based repo
 csv_resource = ResourceFactory.create("csv", file_path="/data/products.csv")
+
+# Use XInspector for schema discovery and model generation
+inspector = XInspector(csv_resource)
+schema = await inspector.discover_schema()
+Product = await inspector.generate_model("products")
+
 product_repo = await XRepoFactory.create_from_resource(
     resource=csv_resource,
-    auto_generate_model=True,
-    model_name="Product"
+    model_class=Product,
+    schema=schema
 )
 
-# Example 4: View repo from multiple resources
+# Example 3: View repo from multiple resources
+# First use XInspector to discover schemas
+inspector = XInspector(mongo_resource)
+user_schema = await inspector.discover_schema("users")
+order_schema = await inspector.discover_schema("orders")
+
+# Generate joined model
+UserOrderView = await inspector.generate_joined_model({
+    "users": user_schema,
+    "orders": order_schema
+}, join_config={"on": "user_id", "type": "left_join"})
+
 user_order_view = await XRepoFactory.create_view_from_resources(
     name="user_orders",
     resources=[
@@ -724,8 +722,11 @@ user_order_view = await XRepoFactory.create_view_from_resources(
         "on": "user_id",
         "type": "left_join"
     },
-    auto_generate_model=True,
-    result_model_name="UserOrderView"
+    result_model_class=UserOrderView,
+    schemas={
+        "mongo.users": user_schema,
+        "mongo.orders": order_schema
+    }
 )
 
 # Query the view
@@ -734,17 +735,21 @@ user_orders = await user_order_view.list({
     "order_filters": {"created_at__gte": "2024-01-01"}
 })
 
-# Example 5: List available collections/tables
+# Example 4: List available collections/tables and create repos
 collections = await mongo_resource.list_collections_or_tables()
 print(f"Available collections: {collections}")
 
-# Create repos for all collections
+# Create repos for all collections using XInspector
+inspector = XInspector(mongo_resource)
 repos = {}
 for collection in collections:
+    schema = await inspector.discover_schema(collection)
+    model = await inspector.generate_model(collection)
     repos[collection] = await XRepoFactory.create_from_resource(
         resource=mongo_resource,
+        model_class=model,
         collection=collection,
-        auto_generate_model=True
+        schema=schema
     )
 ```
 
