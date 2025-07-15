@@ -7,7 +7,7 @@ After thorough review and decision-making process, the following architectural d
 ### Core Architecture Decisions
 
 1. **Namespace Implementation**: Extend CacheManager rather than creating separate NamespaceRegistry
-2. **Inspector vs Models**: Clear separation - Inspector generates models, Models registers them
+2. **Inspector vs Registry**: Clear separation - Inspector generates models, Registry registers them
 3. **Repo Factory**: Explicit configuration with smart defaults (optional `materialized` parameter)
 4. **Fuzzy Search**: Field-level metadata using Pydantic Field(fuzzy_searchable=True)
 5. **XObjPrototype**: Strict Abstract Base Class with runtime enforcement
@@ -25,11 +25,11 @@ After reviewing the documentation, I've identified significant architectural ove
 
 1. **Scattered Inspection Functionality**
    - Schema discovery split between XResource and Repo
-   - Model generation duplicated in MODELS.md and REPO.md
+   - Model generation duplicated in REGISTRY.md and REPO.md
    - Statistics and profiling mixed into multiple modules
 
 2. **Overlapping Responsibilities**
-   - MODELS.md doing too much (UI, permissions, audit, statistics, inspection)
+   - REGISTRY.md doing too much (UI, permissions, audit, statistics, inspection)
    - Repo pattern overly complex with too many strategies
    - Unclear separation between XObjPrototype models and Dynamic Model Registry
 
@@ -47,16 +47,16 @@ After reviewing the documentation, I've identified significant architectural ove
 - Preview and sampling capabilities
 - Clear integration points with other modules
 
-✅ **MODELS_SIMPLIFIED.md Created** - Focused version that:
+✅ **REGISTRY_SIMPLIFIED.md Created** - Focused version that:
 - Removes inspection/statistics functionality (moved to Inspector)
 - Focuses on core registry responsibilities
 - Maintains UI widget detection
 - Keeps permissions and audit systems
 - Provides clear integration with Inspector
 
-✅ **Inspector vs Models Boundary** - DECIDED:
+✅ **Inspector vs Registry Boundary** - DECIDED:
 - Inspector generates models (analysis phase)
-- Models registers them (runtime phase)
+- Registry registers them (runtime phase)
 - Clear two-step process maintains separation of concerns
 
 ✅ **Repo Factory Auto-Detection** - DECIDED:
@@ -103,7 +103,7 @@ After reviewing the documentation, I've identified significant architectural ove
 
 ✅ **Component Registration Order** - DECIDED:
 - Manual registration in startup sequence
-- Explicit dependency order (Settings → Resources → Inspector → Repos → Models)
+- Explicit dependency order (Settings → Resources → Inspector → Repos → Registry)
 - Clear control flow for debugging
 - No magic or hidden registration
 
@@ -136,7 +136,7 @@ After reviewing the documentation, I've identified significant architectural ove
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Inspector     │     │     Models      │     │   Repo    │
+│   Inspector     │     │    Registry     │     │   Repo    │
 ├─────────────────┤     ├─────────────────┤     ├─────────────────┤
 │ Schema Discovery│     │ Model Registry  │     │ Data Access     │
 │ Data Profiling  │     │ UI Widgets      │     │ CRUD Operations │
@@ -173,7 +173,7 @@ After reviewing the documentation, I've identified significant architectural ove
    - XRESOURCE.md: Add internal pooling, remove schema discovery
    - XINSPECTOR.md: Confirm as sole model generator
    - XREPO.md: Add factory with smart defaults, remove ModelGenerator
-   - XMODELS.md: Update to show it only registers (not generates)
+   - XREGISTRY.md: Update to show it only registers (not generates)
    - XSETTINGS.md: Ensure alignment with decisions
 3. Create comprehensive test suite validating all decisions
 4. Document standard startup sequence with manual registration
@@ -228,9 +228,9 @@ cache.register_ns("ns.inspector.db", inspector)
 user_repo = create_repo(db_resource, materialized=None)  # Auto-detects
 cache.register_ns("ns.repos.users", user_repo)
 
-# 5. Models (registration only)
+# 5. Registry (registration only)
 UserModel = inspector.generate_model("users")  # Inspector generates
-model_registry.register(UserModel)  # Models only registers
+model_registry.register(UserModel)  # Registry only registers
 
 # Fuzzy Search Index Registration
 # Concatenate all fuzzy searchable fields (defined in model) into single string
@@ -293,7 +293,7 @@ repos = cache.list_ns("ns.repos.*")
    # Step 1: Inspector analyzes and generates
    model_class = inspector.generate_model("users")
    
-   # Step 2: Models registers for runtime use
+   # Step 2: Registry registers for runtime use
    model_registry.register(model_class, namespace="ns.models.User")
    ```
 

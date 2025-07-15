@@ -433,7 +433,7 @@ class XRepoFactory:
 
 ## Model Integration - Delegated to XInspector
 
-Model generation from schemas is handled by XInspector to maintain clear separation of concerns. XInspector handles all schema discovery and model generation, while Repo focuses purely on data access patterns. The integration follows a two-step process: (1) Inspector generates models, (2) Models registry registers them for runtime use. For model generation details, see [XINSPECTOR.md](./XINSPECTOR.md).
+Model generation from schemas is handled by XInspector to maintain clear separation of concerns. XInspector handles all schema discovery and model generation, while Repo focuses purely on data access patterns. The integration follows a two-step process: (1) Inspector generates models, (2) Registry registers them for runtime use. For model generation details, see [XINSPECTOR.md](./XINSPECTOR.md).
 
 ### Integration with XInspector
 
@@ -445,8 +445,8 @@ from src.server.core.xinspector import XInspector
 inspector = XInspector(mongo_resource)
 User = await inspector.generate_model("users")
 
-# Models are then registered with XModels registry
-from src.server.core.xmodels import model_registry
+# Models are then registered with XRegistry
+from src.server.core.xregistry import model_registry
 model_registry.register(User, namespace="ns.models.User")
 ```
 
@@ -788,10 +788,10 @@ class XRepoConfigurationError(XRepoError):
 - Repo uses models for type-safe data access
 - Clear separation: Inspector analyzes, Repo accesses
 
-### With XModels
-- Generated models are registered in XModels registry
+### With XRegistry
+- Generated models are registered in XRegistry
 - Repo queries registry for model metadata
-- Models provide UI hints and permissions
+- Registry provides UI hints and permissions
 
 ### With XResource
 - Repo delegates all connection management to Resource
@@ -876,9 +876,9 @@ async def initialize_namespace_system(cache_manager: CacheManager):
     )
     await cache_manager.register_ns("ns.repos.users", user_repo)
     
-    # 5. Models (registration only - generation done by Inspector)
+    # 5. Registry (registration only - generation done by Inspector)
     UserModel = await inspector.generate_model("users")  # Inspector generates
-    model_registry.register(UserModel)  # Models only registers
+    model_registry.register(UserModel)  # Registry only registers
     await cache_manager.register_ns("ns.models.User", UserModel)
     
     # 6. Fuzzy Search Index Registration
@@ -903,5 +903,5 @@ The Repo abstraction provides:
 2. **Smart Defaults**: Auto-detection of repo type based on resource
 3. **Type Safety**: Full Pydantic model support
 4. **Flexibility**: Optional override of auto-detection
-5. **Clean Architecture**: Clear separation from schema discovery (XInspector) and model registry (XModels)
+5. **Clean Architecture**: Clear separation from schema discovery (XInspector) and model registry (XRegistry)
 6. **Namespace Integration**: CacheManager extension provides namespace registration without separate service
