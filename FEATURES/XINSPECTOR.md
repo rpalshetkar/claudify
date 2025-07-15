@@ -2,14 +2,14 @@
 
 ## Overview
 
-The Inspector module provides a unified interface for data inspection, schema discovery, and model generation across all data sources in the XObjPrototype ecosystem. It consolidates functionality previously scattered across XResource, Repo, and Models components.
+The Inspector module provides a unified interface for data inspection, schema discovery, and model generation across all data sources in the XObjPrototype ecosystem. It consolidates functionality previously scattered across XResource, Repo, and Registry components.
 
 ## Cross-References
 
 - **Used By**:
   - [XRESOURCE.md](./XRESOURCE.md) - Resources delegate schema discovery to Inspector
   - [XREPO.md](./XREPO.md) - Repo uses Inspector for model generation
-  - [XMODELS.md](./XMODELS.md) - Models registry uses Inspector for schema discovery
+  - [XREGISTRY.md](./XREGISTRY.md) - Registry uses Inspector-generated models
 - **Generates**: Models that inherit from [XOBJPROTOTYPE.md](./XOBJPROTOTYPE.md)
 - **See Also**: [CLAUDE.md](./CLAUDE.md) for architecture overview
 
@@ -22,7 +22,7 @@ The Inspector module provides a unified interface for data inspection, schema di
 5. **Metadata Extraction** - Gather comprehensive metadata about data sources
 6. **Categorical Field Detection** - Identify and manage enumerable fields with distinct values
 
-**Important**: XInspector is the only component responsible for model generation. Other components (XRepo, XModels) use Inspector-generated models but never generate models themselves.
+**Important**: XInspector is the only component responsible for model generation. Other components (XRepo, XRegistry) use Inspector-generated models but never generate models themselves.
 
 ## Design Principles
 

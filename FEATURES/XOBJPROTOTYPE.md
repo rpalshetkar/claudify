@@ -752,7 +752,7 @@ Based on our architecture review, the following decisions have been made:
 ### 5. Integration with Other Components
 
 - **XInspector**: Will generate dynamic models that inherit from XObjPrototype
-- **XModels**: Will register XObjPrototype instances for runtime management
+- **XRegistry**: Will register XObjPrototype instances for runtime management
 - **XRepo**: Will use XObjPrototype metadata for audit and permissions
 - **XResource**: Connection information can be stored in XObjPrototype metadata
 
