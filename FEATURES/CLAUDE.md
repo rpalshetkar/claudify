@@ -14,7 +14,7 @@ This is the FEATURES module of the claudify project - a sophisticated Python arc
 - **XResource** - Connection factory for file/database/REST/websocket sources (see XRESOURCE.md)
 - **XRepository** - Data access with ACL, audit, and multi-source operations (see XREPO.md)
 - **XInspector** - Schema discovery and data profiling (see XINSPECTOR.md)
-- **XModels** - Dynamic model registry with UI mappings and permissions (see XMODELS.md)
+- **XRegistry** - Dynamic model registry with UI mappings and permissions (see XREGISTRY.md)
 
 ### Pending Implementation
 - Data Xlator/Adapters/Translator/Mutators
@@ -98,7 +98,7 @@ src/
 │   └── inspector/
 │       └── schema.py        # XInspector
 ├── models/
-│   └── registry.py          # XModels dynamic registry
+│   └── registry.py          # XRegistry dynamic registry
 ├── server/
 │   ├── main.py             # FastAPI app
 │   └── middleware/         # Security headers

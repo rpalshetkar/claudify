@@ -11,10 +11,10 @@ Based on the architecture review (see TODO.md):
 1. **Strict ABC Pattern**: XObjPrototype uses runtime enforcement to prevent direct instantiation
 2. **Clear Separation of Concerns**:
    - **XInspector**: Schema discovery and model generation (analysis phase)
-   - **XModels**: Model registration and management (runtime phase)
+   - **XRegistry**: Model registration and management (runtime phase)
    - **XResource**: Connection management with internal pooling
    - **XRepo**: Data access with smart factory defaults
-3. **Model Generation Flow**: Inspector → generates models → Models registry registers them
+3. **Model Generation Flow**: Inspector → generates models → Registry registers them
 4. **Resource Pooling**: Each resource type manages its own connection pooling internally
 5. **Flat Metadata**: Simple Dict[str, Any] for maximum flexibility
 
@@ -81,7 +81,7 @@ classDiagram
         +sync()
     }
 
-    class XModels {
+    class XRegistry {
         +registry: Dict[str, Model]
         +ui_mappings: Dict
         +permissions: Dict
@@ -108,8 +108,8 @@ classDiagram
     ConnectedRepository --> XResource : uses
     ConnectedRepository --> XInspector : uses
     MaterializedRepository --> XInspector : uses
-    XModels --> XInspector : uses
-    XModels --> XObjPrototype : generates
+    XRegistry --> XInspector : uses
+    XRegistry --> XObjPrototype : generates
 
     class ResourceType {
         <<enumeration>>
@@ -189,7 +189,7 @@ flowchart TB
     end
 
     subgraph "Model Registry"
-        M1[XModels Registry]
+        M1[XRegistry]
         M2[UI Schema]
         M3[Permissions]
         M4[Audit]
@@ -232,7 +232,7 @@ sequenceDiagram
     participant Resource as XResource
     participant Inspector as XInspector
     participant ModelGen as ModelGenerator
-    participant Registry as XModels
+    participant Registry as XRegistry
     participant Repo as XRepo
 
     Resource->>Inspector: Create Inspector(resource)
@@ -312,7 +312,7 @@ flowchart TB
     end
 
     subgraph "ModelLayer"
-        XM[XModelsRegistry]
+        XM[XRegistry]
         DM[DynamicModels]
         UI[UIWidgets]
         PM[Permissions]
@@ -366,7 +366,7 @@ sequenceDiagram
     participant App as Application
     participant XR as XResource
     participant XI as XInspector
-    participant XM as XModels
+    participant XM as XRegistry
     participant XRP as XRepository
 
     App->>XR: create_resource(config)
@@ -421,13 +421,13 @@ sequenceDiagram
 | **XResource**     | Connection factory       | Multi-source support, metadata management     |
 | **XInspector**    | Schema discovery         | Profiling, model generation, statistics       |
 | **XRepository**   | Data access patterns     | CRUD operations, ACL, audit logging           |
-| **XModels**       | Model registry           | Dynamic registration, UI mapping, permissions |
+| **XRegistry**      | Model registry           | Dynamic registration, UI mapping, permissions |
 
 ### Design Patterns
 
 1. **Abstract Factory**: XResource creates appropriate connection types
 2. **Strategy**: Repository implementations for different access patterns
-3. **Registry**: XModels maintains central model registry
+3. **Registry**: XRegistry maintains central model registry
 4. **Delegation**: Components delegate specialized tasks to Inspector
 5. **Template Method**: XObjPrototype defines model structure
 
@@ -437,7 +437,7 @@ sequenceDiagram
 
 - **XResource**: Delegates schema discovery
 - **XRepository**: Uses for model generation
-- **XModels**: Leverages for dynamic model creation
+- **XRegistry**: Leverages for dynamic model creation
 
 ### XObjPrototype Inheritance
 
