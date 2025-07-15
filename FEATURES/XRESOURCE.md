@@ -4,10 +4,13 @@
 
 XResource is a unified abstraction layer for managing various types of data connections and resources. It implements a factory pattern to create and manage connections to files, databases, REST endpoints, and websockets while inheriting from XObjPrototype for consistent validation and behavior.
 
+**Key Architectural Decision**: Each resource type manages its own internal connection pooling, optimizing for its specific needs (e.g., database pools, HTTP connection reuse, file handle management).
+
 ## Design Principles
 
 - **Ultrathin abstraction**: Minimal overhead while providing essential functionality
 - **Factory pattern**: Creates appropriate connection instances based on resource type
+- **Self-contained pooling**: Each resource type manages its own connection pooling
 - **Metadata-rich**: Stores comprehensive connection parameters and metadata
 - **Type-safe**: Leverages Pydantic for validation and type checking
 - **Async-first**: Built for asynchronous operations where applicable
@@ -30,7 +33,15 @@ XResource is a unified abstraction layer for managing various types of data conn
 ### Network Resources
 
 - **REST API**: HTTP/HTTPS endpoints with authentication support
+
+### Event Stream Resources
+
 - **WebSocket**: Real-time bidirectional communication
+- **Redis Pub/Sub**: Channel-based messaging
+- **Kafka**: Distributed event streaming
+- **RabbitMQ**: Message queue protocols
+- **MQTT**: IoT messaging protocol
+- **Server-Sent Events (SSE)**: One-way event streams
 
 ## Architecture
 
@@ -77,13 +88,8 @@ class XResource(XObjPrototype, ABC):
         """Return resource-specific metadata"""
         pass
 
-    @abstractmethod
-    async def discover_schema(self, collection: str = None) -> Dict[str, Any]:
-        """Discover schema information from the resource
-
-        Delegates to Inspector - see XINSPECTOR.md for implementation details
-        """
-        pass
+    # Schema discovery removed - delegated to XInspector
+    # See XINSPECTOR.md for schema discovery implementation
 
     @abstractmethod
     async def list_collections_or_tables(self) -> List[str]:
@@ -96,15 +102,24 @@ class FileResource(XResource):
     encoding: str = "utf-8"
 
 class DatabaseResource(XResource):
-    """Base class for database resources"""
+    """Base class for database resources with internal pooling"""
     connection_string: str
     pool_size: int = 10
+    _pool: Optional[Any] = None  # Each DB type manages its own pool
 
 class NetworkResource(XResource):
     """Base class for network resources"""
     endpoint: str
     timeout: int = 30
     auth_params: Optional[Dict[str, Any]] = None
+
+class EventStreamResource(XResource):
+    """Base class for event streaming resources"""
+    connection_params: Dict[str, Any]
+    event_handlers: Dict[str, Callable] = Field(default_factory=dict)
+    reconnect_interval: int = 5  # seconds
+    max_reconnect_attempts: int = 10
+    _active_subscriptions: Set[str] = Field(default_factory=set)
 ```
 
 ## Resource Factory
@@ -209,21 +224,101 @@ weather_data = await api_resource.get("/current", params={"city": "London"})
 await api_resource.disconnect()
 ```
 
+### Event Stream Resource Examples
+
+```python
+# WebSocket Resource
+websocket_resource = ResourceFactory.create(
+    "websocket",
+    name="trading_stream",
+    endpoint="wss://stream.example.com/trades",
+    auth_params={"token": settings.WS_TOKEN},
+    metadata=ResourceMetadata(
+        name="trading_stream",
+        description="Real-time trading data stream",
+        tags=["trading", "realtime", "websocket"],
+        created_at=datetime.now(),
+        updated_at=datetime.now()
+    )
+)
+
+# Set up event handlers
+async def on_trade(data):
+    print(f"New trade: {data}")
+
+async def on_error(error):
+    print(f"Stream error: {error}")
+
+websocket_resource.on("trade", on_trade)
+websocket_resource.on("error", on_error)
+
+await websocket_resource.connect()
+await websocket_resource.subscribe("BTC/USD")
+
+# Redis Pub/Sub Resource
+redis_stream = ResourceFactory.create(
+    "redis_pubsub",
+    name="event_bus",
+    connection_string="redis://localhost:6379",
+    metadata=ResourceMetadata(
+        name="event_bus",
+        description="Application event bus",
+        tags=["events", "pubsub", "redis"],
+        created_at=datetime.now(),
+        updated_at=datetime.now()
+    )
+)
+
+await redis_stream.connect()
+await redis_stream.subscribe("user_events", lambda msg: print(f"User event: {msg}"))
+await redis_stream.publish("user_events", {"type": "login", "user_id": "123"})
+
+# Kafka Resource
+kafka_resource = ResourceFactory.create(
+    "kafka",
+    name="event_stream",
+    bootstrap_servers="localhost:9092",
+    consumer_group="my_service",
+    metadata=ResourceMetadata(
+        name="event_stream",
+        description="Kafka event stream",
+        tags=["kafka", "events", "streaming"],
+        created_at=datetime.now(),
+        updated_at=datetime.now()
+    )
+)
+
+await kafka_resource.connect()
+async for event in kafka_resource.consume("user_events"):
+    print(f"Kafka event: {event}")
+```
+
 ## Implementation Details
 
 ### MongoDB Resource
 
 ```python
 class MongoDBResource(DatabaseResource):
-    """MongoDB database resource"""
+    """MongoDB database resource with internal connection pooling"""
 
     database: str
     _client: Optional[AsyncIOMotorClient] = None
     _db: Optional[AsyncIOMotorDatabase] = None
+    
+    # Internal pooling configuration
+    max_pool_size: int = 100
+    min_pool_size: int = 10
+    max_idle_time_ms: int = 60000  # 1 minute
 
     async def connect(self) -> None:
-        """Connect to MongoDB"""
-        self._client = AsyncIOMotorClient(self.connection_string)
+        """Connect to MongoDB with internal pooling"""
+        # Motor (AsyncIOMotorClient) manages its own connection pool internally
+        self._client = AsyncIOMotorClient(
+            self.connection_string,
+            maxPoolSize=self.max_pool_size,
+            minPoolSize=self.min_pool_size,
+            maxIdleTimeMS=self.max_idle_time_ms
+        )
         self._db = self._client[self.database]
         self._connection = self._db
 
@@ -256,184 +351,43 @@ class MongoDBResource(DatabaseResource):
             "type": "mongodb"
         }
 
-    async def discover_schema(self, collection: str = None) -> Dict[str, Any]:
-        """Discover schema from MongoDB collection by analyzing sample documents"""
-        if not collection:
-            raise ValueError("collection is required for MongoDB schema discovery")
-
-        collection = self._db[collection]
-
-        # Sample documents to infer schema
-        sample_size = 100
-        sample_docs = await collection.aggregate([
-            {"$sample": {"size": sample_size}},
-            {"$limit": sample_size}
-        ]).to_list(length=sample_size)
-
-        if not sample_docs:
-            return {
-                "collection": collection,
-                "fields": {},
-                "sample_count": 0,
-                "indexes": await self._get_collection_indexes(collection)
-            }
-
-        # Analyze field types and patterns
-        field_analysis = {}
-        for doc in sample_docs:
-            self._analyze_document_fields(doc, field_analysis)
-
-        # Convert analysis to schema format
-        schema = {
-            "collection": collection,
-            "fields": self._build_field_schema(field_analysis, len(sample_docs)),
-            "sample_count": len(sample_docs),
-            "document_count": await collection.count_documents({}),
-            "indexes": await self._get_collection_indexes(collection)
-        }
-
-        return schema
+    # Schema discovery removed - use XInspector instead
+    # Example usage:
+    # inspector = XInspector(mongo_resource)
+    # schema = await inspector.discover_schema("users")
 
     async def list_collections_or_tables(self) -> List[str]:
         """List all collections in the MongoDB database"""
         return await self._db.list_collections()
 
-    def _analyze_document_fields(self, doc: Dict[str, Any], field_analysis: Dict[str, Dict]):
-        """Recursively analyze document fields"""
-        for key, value in doc.items():
-            if key not in field_analysis:
-                field_analysis[key] = {
-                    "types": {},
-                    "null_count": 0,
-                    "total_count": 0,
-                    "sample_values": set(),
-                    "nested_fields": {}
-                }
-
-            field_info = field_analysis[key]
-            field_info["total_count"] += 1
-
-            if value is None:
-                field_info["null_count"] += 1
-            else:
-                value_type = type(value).__name__
-                field_info["types"][value_type] = field_info["types"].get(value_type, 0) + 1
-
-                # Store sample values for type inference
-                if len(field_info["sample_values"]) < 10:
-                    field_info["sample_values"].add(str(value)[:100])  # Truncate long values
-
-                # Handle nested documents
-                if isinstance(value, dict):
-                    self._analyze_document_fields(value, field_info["nested_fields"])
-                elif isinstance(value, list) and value and isinstance(value[0], dict):
-                    # Analyze first few array elements if they're objects
-                    for item in value[:5]:
-                        if isinstance(item, dict):
-                            self._analyze_document_fields(item, field_info["nested_fields"])
-
-    def _build_field_schema(self, field_analysis: Dict[str, Dict], total_docs: int) -> Dict[str, Dict]:
-        """Convert field analysis to standardized schema format"""
-        schema_fields = {}
-
-        for field_name, analysis in field_analysis.items():
-            # Determine primary type
-            if analysis["types"]:
-                primary_type = max(analysis["types"], key=analysis["types"].get)
-            else:
-                primary_type = "null"
-
-            # Calculate statistics
-            null_percentage = (analysis["null_count"] / total_docs) * 100
-            is_required = null_percentage < 10  # Less than 10% null = required
-
-            # Map MongoDB types to Python/Pydantic types
-            python_type = self._map_mongodb_type_to_python(primary_type, analysis)
-
-            schema_fields[field_name] = {
-                "type": python_type,
-                "required": is_required,
-                "null_percentage": null_percentage,
-                "mongodb_types": analysis["types"],
-                "sample_values": list(analysis["sample_values"]),
-                "cardinality": self._estimate_cardinality(analysis["sample_values"], analysis["total_count"])
-            }
-
-            # Add nested schema if applicable
-            if analysis["nested_fields"]:
-                schema_fields[field_name]["nested_schema"] = self._build_field_schema(
-                    analysis["nested_fields"],
-                    analysis["total_count"]
-                )
-
-        return schema_fields
-
-    def _map_mongodb_type_to_python(self, mongo_type: str, analysis: Dict) -> str:
-        """Map MongoDB types to Python types for model generation"""
-        type_mapping = {
-            "str": "str",
-            "int": "int",
-            "float": "float",
-            "bool": "bool",
-            "list": "List[Any]",
-            "dict": "Dict[str, Any]",
-            "datetime": "datetime",
-            "ObjectId": "str",  # Convert ObjectId to string
-            "Decimal128": "Decimal"
+    def get_pool_stats(self) -> Dict[str, Any]:
+        """Get connection pool statistics"""
+        if not self._client:
+            return {"status": "not_connected"}
+        
+        # Motor exposes pool stats through the underlying pymongo client
+        stats = {
+            "max_pool_size": self.max_pool_size,
+            "min_pool_size": self.min_pool_size,
+            "active_connections": len(self._client.nodes),
+            "idle_time_ms": self.max_idle_time_ms
         }
-
-        base_type = type_mapping.get(mongo_type, "Any")
-
-        # Enhance type based on analysis
-        if mongo_type == "str":
-            # Check if it looks like an email, URL, etc.
-            sample_values = analysis.get("sample_values", [])
-            if any("@" in val for val in sample_values):
-                return "EmailStr"
-            elif any(val.startswith(("http://", "https://")) for val in sample_values):
-                return "HttpUrl"
-
-        return base_type
-
-    def _estimate_cardinality(self, sample_values: set, total_count: int) -> str:
-        """Estimate field cardinality for UI widget suggestions"""
-        if not sample_values:
-            return "unknown"
-
-        unique_ratio = len(sample_values) / total_count if total_count > 0 else 0
-
-        if unique_ratio < 0.05:
-            return "low"    # Good for select dropdowns
-        elif unique_ratio < 0.5:
-            return "medium" # Might be good for autocomplete
-        else:
-            return "high"   # Probably unique identifiers
-
-    async def _get_collection_indexes(self, collection: str) -> List[Dict[str, Any]]:
-        """Get index information for a collection"""
-        collection = self._db[collection]
-        indexes = []
-
-        async for index in collection.list_indexes():
-            indexes.append({
-                "name": index.get("name"),
-                "fields": list(index.get("key", {}).keys()),
-                "unique": index.get("unique", False),
-                "sparse": index.get("sparse", False)
-            })
-
-        return indexes
+        return stats
 ```
 
 ### CSV Resource
 
 ```python
 class CSVResource(FileResource):
-    """CSV file resource"""
+    """CSV file resource with efficient file handle management"""
 
     delimiter: str = ","
     has_header: bool = True
     quotechar: str = '"'
+    
+    # File handle management
+    _file_handle: Optional[Any] = None
+    buffer_size: int = 8192  # 8KB buffer for streaming
 
     async def connect(self) -> None:
         """Open CSV file"""
@@ -465,128 +419,236 @@ class CSVResource(FileResource):
             "type": "csv"
         }
 
-    async def discover_schema(self, collection: str = None) -> Dict[str, Any]:
-        """Discover schema from CSV file by analyzing headers and sample data"""
-        import csv
-        import io
-        from pathlib import Path
-
-        if not self._connection or not self._connection.exists():
-            raise FileNotFoundError(f"CSV file not found: {self.file_path}")
-
-        # Read CSV file and analyze
-        with open(self.file_path, 'r', encoding=self.encoding) as file:
-            # Detect delimiter if not specified
-            if self.delimiter == ",":
-                dialect = csv.Sniffer().sniff(file.read(1024))
-                file.seek(0)
-                actual_delimiter = dialect.delimiter
-            else:
-                actual_delimiter = self.delimiter
-
-            reader = csv.DictReader(file, delimiter=actual_delimiter)
-
-            # Get field names from header
-            if not self.has_header:
-                # Generate column names if no header
-                first_row = next(reader, [])
-                fieldnames = [f"column_{i}" for i in range(len(first_row))]
-                file.seek(0)
-                reader = csv.DictReader(file, fieldnames=fieldnames, delimiter=actual_delimiter)
-
-            fieldnames = reader.fieldnames or []
-
-            # Analyze sample data
-            field_analysis = {name: {"values": [], "types": {}} for name in fieldnames}
-            row_count = 0
-
-            for i, row in enumerate(reader):
-                if i >= 100:  # Limit sample size
-                    break
-                row_count += 1
-
-                for field_name, value in row.items():
-                    if field_name in field_analysis:
-                        field_analysis[field_name]["values"].append(value)
-
-                        # Type detection
-                        detected_type = self._detect_csv_type(value)
-                        field_analysis[field_name]["types"][detected_type] = \
-                            field_analysis[field_name]["types"].get(detected_type, 0) + 1
-
-        # Build schema
-        schema = {
-            "file": self.file_path,
-            "fields": {},
-            "row_count": row_count,
-            "delimiter": actual_delimiter,
-            "has_header": self.has_header
-        }
-
-        for field_name, analysis in field_analysis.items():
-            # Determine primary type
-            if analysis["types"]:
-                primary_type = max(analysis["types"], key=analysis["types"].get)
-            else:
-                primary_type = "str"
-
-            # Calculate statistics
-            null_count = analysis["values"].count("") + analysis["values"].count(None)
-            null_percentage = (null_count / len(analysis["values"])) * 100 if analysis["values"] else 0
-
-            schema["fields"][field_name] = {
-                "type": primary_type,
-                "required": null_percentage < 10,
-                "null_percentage": null_percentage,
-                "sample_values": analysis["values"][:10],
-                "cardinality": self._estimate_cardinality(set(analysis["values"]), len(analysis["values"]))
-            }
-
-        return schema
+    # Schema discovery removed - use XInspector instead
+    # Example usage:
+    # inspector = XInspector(csv_resource)
+    # schema = await inspector.discover_schema()
 
     async def list_collections_or_tables(self) -> List[str]:
         """For CSV, return the filename as the single 'table'"""
         return [Path(self.file_path).stem]
 
-    def _detect_csv_type(self, value: str) -> str:
-        """Detect Python type from CSV string value"""
-        if not value or value.strip() == "":
-            return "null"
+    async def read_stream(self, chunk_size: int = 1000) -> AsyncIterator[List[Dict[str, Any]]]:
+        """Stream CSV data in chunks for memory efficiency"""
+        import csv
+        import aiofiles
+        
+        async with aiofiles.open(self.file_path, mode='r', encoding=self.encoding) as file:
+            content = await file.read()
+            
+        # Use StringIO for CSV parsing
+        from io import StringIO
+        buffer = StringIO(content)
+        reader = csv.DictReader(buffer, delimiter=self.delimiter)
+        
+        chunk = []
+        for row in reader:
+            chunk.append(row)
+            if len(chunk) >= chunk_size:
+                yield chunk
+                chunk = []
+        
+        if chunk:  # Yield remaining rows
+            yield chunk
+```
 
-        value = value.strip()
+### WebSocket Event Stream Resource
 
-        # Try integer
+```python
+class WebSocketEventStream(EventStreamResource):
+    """WebSocket resource for real-time bidirectional communication"""
+    
+    endpoint: str
+    protocols: List[str] = Field(default_factory=list)
+    _websocket: Optional[Any] = None  # websockets.WebSocketClientProtocol
+    _background_tasks: Set[asyncio.Task] = Field(default_factory=set)
+    
+    async def connect(self) -> None:
+        """Connect to WebSocket endpoint"""
+        import websockets
+        
         try:
-            int(value)
-            return "int"
-        except ValueError:
-            pass
-
-        # Try float
+            self._websocket = await websockets.connect(
+                self.endpoint,
+                subprotocols=self.protocols,
+                **self.connection_params
+            )
+            self._connection = self._websocket
+            
+            # Start message handler
+            task = asyncio.create_task(self._handle_messages())
+            self._background_tasks.add(task)
+            
+        except Exception as e:
+            raise XResourceConnectionError(f"WebSocket connection failed: {e}")
+    
+    async def _handle_messages(self):
+        """Handle incoming WebSocket messages"""
         try:
-            float(value)
-            return "float"
-        except ValueError:
-            pass
+            async for message in self._websocket:
+                await self._dispatch_event("message", message)
+                
+                # Parse message type if JSON
+                try:
+                    data = json.loads(message)
+                    if "type" in data:
+                        await self._dispatch_event(data["type"], data)
+                except json.JSONDecodeError:
+                    pass
+                    
+        except websockets.exceptions.ConnectionClosed:
+            await self._dispatch_event("close", None)
+            await self._handle_reconnect()
+    
+    async def send(self, data: Union[str, Dict[str, Any]]) -> None:
+        """Send data through WebSocket"""
+        if isinstance(data, dict):
+            data = json.dumps(data)
+        await self._websocket.send(data)
+    
+    async def subscribe(self, channel: str) -> None:
+        """Subscribe to a specific channel/topic"""
+        await self.send({
+            "action": "subscribe",
+            "channel": channel
+        })
+        self._active_subscriptions.add(channel)
+    
+    def on(self, event: str, handler: Callable) -> None:
+        """Register event handler"""
+        self.event_handlers[event] = handler
+    
+    async def _dispatch_event(self, event: str, data: Any) -> None:
+        """Dispatch event to registered handlers"""
+        if event in self.event_handlers:
+            await self.event_handlers[event](data)
+```
 
-        # Try boolean
-        if value.lower() in ("true", "false", "yes", "no", "1", "0"):
-            return "bool"
+### Redis Event Stream Resource
 
-        # Try date/datetime patterns
-        import re
-        date_patterns = [
-            r'\d{4}-\d{2}-\d{2}',  # YYYY-MM-DD
-            r'\d{2}/\d{2}/\d{4}',  # MM/DD/YYYY
-            r'\d{2}-\d{2}-\d{4}',  # MM-DD-YYYY
-        ]
+```python
+class RedisEventStream(EventStreamResource):
+    """Redis Pub/Sub resource for message passing"""
+    
+    connection_string: str
+    _redis: Optional[Any] = None  # aioredis.Redis
+    _pubsub: Optional[Any] = None
+    _subscriber_tasks: Dict[str, asyncio.Task] = Field(default_factory=dict)
+    
+    async def connect(self) -> None:
+        """Connect to Redis"""
+        import aioredis
+        
+        self._redis = await aioredis.from_url(
+            self.connection_string,
+            **self.connection_params
+        )
+        self._pubsub = self._redis.pubsub()
+        self._connection = self._redis
+    
+    async def subscribe(self, channel: str, handler: Callable) -> None:
+        """Subscribe to a channel with handler"""
+        await self._pubsub.subscribe(channel)
+        self._active_subscriptions.add(channel)
+        
+        # Start listening task
+        task = asyncio.create_task(self._listen_channel(channel, handler))
+        self._subscriber_tasks[channel] = task
+    
+    async def _listen_channel(self, channel: str, handler: Callable) -> None:
+        """Listen for messages on a channel"""
+        async for message in self._pubsub.listen():
+            if message["type"] == "message":
+                await handler(message["data"])
+    
+    async def publish(self, channel: str, data: Any) -> None:
+        """Publish message to channel"""
+        if isinstance(data, dict):
+            data = json.dumps(data)
+        await self._redis.publish(channel, data)
+    
+    async def unsubscribe(self, channel: str) -> None:
+        """Unsubscribe from channel"""
+        await self._pubsub.unsubscribe(channel)
+        self._active_subscriptions.discard(channel)
+        
+        # Cancel listener task
+        if channel in self._subscriber_tasks:
+            self._subscriber_tasks[channel].cancel()
+            del self._subscriber_tasks[channel]
+```
 
-        for pattern in date_patterns:
-            if re.match(pattern, value):
-                return "datetime"
+### Kafka Event Stream Resource
 
-        # Default to string
-        return "str"
+```python
+class KafkaEventStream(EventStreamResource):
+    """Kafka resource for distributed event streaming"""
+    
+    bootstrap_servers: str
+    consumer_group: Optional[str] = None
+    producer_config: Dict[str, Any] = Field(default_factory=dict)
+    consumer_config: Dict[str, Any] = Field(default_factory=dict)
+    _producer: Optional[Any] = None  # aiokafka.AIOKafkaProducer
+    _consumer: Optional[Any] = None  # aiokafka.AIOKafkaConsumer
+    
+    async def connect(self) -> None:
+        """Connect to Kafka cluster"""
+        from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
+        
+        # Create producer
+        self._producer = AIOKafkaProducer(
+            bootstrap_servers=self.bootstrap_servers,
+            **self.producer_config
+        )
+        await self._producer.start()
+        
+        # Create consumer if group specified
+        if self.consumer_group:
+            self._consumer = AIOKafkaConsumer(
+                bootstrap_servers=self.bootstrap_servers,
+                group_id=self.consumer_group,
+                **self.consumer_config
+            )
+            await self._consumer.start()
+        
+        self._connection = self._producer
+    
+    async def produce(self, topic: str, value: Any, key: Optional[str] = None) -> None:
+        """Produce message to topic"""
+        if isinstance(value, dict):
+            value = json.dumps(value).encode()
+        elif isinstance(value, str):
+            value = value.encode()
+            
+        await self._producer.send(
+            topic,
+            value=value,
+            key=key.encode() if key else None
+        )
+    
+    async def consume(self, topics: Union[str, List[str]]) -> AsyncIterator[Dict[str, Any]]:
+        """Consume messages from topics"""
+        if isinstance(topics, str):
+            topics = [topics]
+            
+        self._consumer.subscribe(topics)
+        
+        async for msg in self._consumer:
+            yield {
+                "topic": msg.topic,
+                "partition": msg.partition,
+                "offset": msg.offset,
+                "key": msg.key.decode() if msg.key else None,
+                "value": json.loads(msg.value.decode()),
+                "timestamp": msg.timestamp
+            }
+    
+    async def disconnect(self) -> None:
+        """Disconnect from Kafka"""
+        if self._producer:
+            await self._producer.stop()
+        if self._consumer:
+            await self._consumer.stop()
 ```
 
 ## Testing Strategy
@@ -641,17 +703,47 @@ async def test_resource_factory_registry():
     assert isinstance(resource, CustomResource)
 ```
 
+## Connection Pooling Architecture
+
+Each resource type implements its own optimized connection pooling strategy:
+
+### Database Resources
+- **MongoDB**: Uses Motor's built-in connection pooling (maxPoolSize, minPoolSize)
+- **PostgreSQL**: Leverages asyncpg's connection pool
+- **MySQL**: Uses aiomysql's pool implementation
+
+### File Resources
+- **CSV/Excel**: Manages file handles with buffer pools for streaming
+- **JSON/YAML**: Uses memory-mapped files for large datasets
+
+### Network Resources
+- **REST API**: HTTP connection pooling via aiohttp sessions
+
+### Event Stream Resources
+- **WebSocket**: Persistent connections with automatic reconnection
+- **Redis Pub/Sub**: Connection multiplexing for multiple channels
+- **Kafka**: Producer/Consumer connection pools per topic
+- **RabbitMQ**: Channel multiplexing over AMQP connections
+- **MQTT**: QoS-aware connection management
+
 ## Integration with Inspector
 
-The Resource component delegates all schema discovery operations to the Inspector (see [XINSPECTOR.md](./XINSPECTOR.md)). This separation of concerns ensures that Resource focuses on connection management while Inspector handles the complex logic of schema inference and data profiling.
+The Resource component delegates all schema discovery operations to the Inspector (see [XINSPECTOR.md](./XINSPECTOR.md)). This separation of concerns ensures that Resource focuses purely on connection management while Inspector handles the complex logic of schema inference and data profiling.
 
-### Schema Discovery Flow
+### Integration Pattern
 
-1. Resource establishes connection to data source
-2. Passes connection handle to Inspector
-3. Inspector performs schema discovery and profiling
-4. Returns discovered schema to Resource
-5. Resource caches schema metadata
+```python
+# Create resource and connect
+mongo_resource = ResourceFactory.create("mongodb", ...)
+await mongo_resource.connect()
+
+# Pass resource to Inspector for schema discovery
+inspector = XInspector(mongo_resource)
+schema = await inspector.discover_schema("users")
+
+# Inspector uses resource's connection internally
+model = await inspector.generate_model("users")
+```
 
 For detailed schema discovery implementation, refer to [XINSPECTOR.md](./XINSPECTOR.md).
 
@@ -715,14 +807,42 @@ retry_attempts = 3
 
 Will be added later
 
+## Architectural Decisions
+
+Based on the architecture review:
+
+1. **Internal Pooling**: Each resource type manages its own connection pooling
+2. **No Schema Discovery**: All schema operations delegated to XInspector
+3. **Self-Contained**: Resources handle their complete lifecycle internally
+4. **Error Handling**: Resource-specific exceptions (XResourceError hierarchy)
+
+## Exception Hierarchy
+
+```python
+class XResourceError(Exception):
+    """Base exception for resource operations"""
+    pass
+
+class XResourceConnectionError(XResourceError):
+    """Connection-related errors"""
+    pass
+
+class XResourceTimeoutError(XResourceError):
+    """Timeout errors"""
+    pass
+
+class XResourcePoolExhaustedError(XResourceError):
+    """Connection pool exhausted"""
+    pass
+```
+
 ## Future Enhancements
 
-1. **Connection Pooling**: Implement connection pooling for database resources
+1. **Advanced Pooling**: Dynamic pool sizing based on load
 2. **Caching**: Add caching layer for frequently accessed resources
-3. **Monitoring**: Resource usage metrics and health checks
-4. **Schema Discovery**: Automatic schema detection for databases
-5. **Transaction Support**: Distributed transaction coordination
-6. **Resource Lifecycle**: Automatic cleanup and resource management
+3. **Monitoring**: Resource usage metrics and pool statistics
+4. **Transaction Support**: Distributed transaction coordination
+5. **Resource Groups**: Manage related resources as a unit
 
 ## Security Considerations
 

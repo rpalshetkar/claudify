@@ -4,6 +4,20 @@
 
 This document provides a comprehensive view of the system architecture, showing the relationships and interactions between all major components.
 
+## Key Architectural Decisions
+
+Based on the architecture review (see TODO.md):
+
+1. **Strict ABC Pattern**: XObjPrototype uses runtime enforcement to prevent direct instantiation
+2. **Clear Separation of Concerns**:
+   - **XInspector**: Schema discovery and model generation (analysis phase)
+   - **XModels**: Model registration and management (runtime phase)
+   - **XResource**: Connection management with internal pooling
+   - **XRepo**: Data access with smart factory defaults
+3. **Model Generation Flow**: Inspector → generates models → Models registry registers them
+4. **Resource Pooling**: Each resource type manages its own connection pooling internally
+5. **Flat Metadata**: Simple Dict[str, Any] for maximum flexibility
+
 ## Component Relationships
 
 ```mermaid
@@ -102,7 +116,7 @@ classDiagram
         FILE
         DATABASE
         REST_API
-        WEBSOCKET
+        EVENT_STREAM
     }
 
     class FileResource {
@@ -126,12 +140,145 @@ classDiagram
         +stream_data()
     }
 
+    class EventStreamResource {
+        +connection_params: Dict
+        +event_handlers: Dict
+        +subscribe()
+        +publish()
+        +on()
+    }
+
     XResource <|-- FileResource : extends
     XResource <|-- DatabaseResource : extends
     XResource <|-- NetworkResource : extends
+    XResource <|-- EventStreamResource : extends
 ```
 
 ## Data Flow Diagram
+
+```mermaid
+flowchart TB
+    subgraph "Data Source Layer"
+        DS1[MongoDB]
+        DS2[PostgreSQL]
+        DS3[CSV Files]
+        DS4[REST APIs]
+        DS5[WebSocket]
+        DS6[Redis Pub/Sub]
+        DS7[Kafka]
+    end
+
+    subgraph "Resource Layer"
+        R1[DatabaseResource<br/>Internal Pooling]
+        R2[FileResource<br/>Buffer Management]
+        R3[NetworkResource<br/>HTTP Pooling]
+        R4[EventStreamResource<br/>Persistent Connections]
+    end
+
+    subgraph "Inspection Layer"
+        I1[XInspector]
+        I2[Schema Discovery]
+        I3[Data Profiling]
+        I4[Model Generation]
+    end
+
+    subgraph "Repository Layer"
+        RP1[XRepoFactory]
+        RP2[ConnectedRepo<br/>Live Connection]
+        RP3[MaterializedRepo<br/>In-Memory]
+    end
+
+    subgraph "Model Registry"
+        M1[XModels Registry]
+        M2[UI Schema]
+        M3[Permissions]
+        M4[Audit]
+    end
+
+    subgraph "Application Layer"
+        A1[Business Logic]
+        A2[API Endpoints]
+        A3[Background Tasks]
+    end
+
+    DS1 & DS2 --> R1
+    DS3 --> R2
+    DS4 --> R3
+    DS5 & DS6 & DS7 --> R4
+
+    R1 & R2 & R3 & R4 --> I1
+    I1 --> I2 & I3
+    I2 --> I4
+    I4 --> M1
+
+    R1 & R2 --> RP1
+    R3 & R4 --> RP1
+    RP1 --> RP2
+    RP1 --> RP3
+
+    M1 --> M2 & M3 & M4
+    RP2 & RP3 --> A1
+    M1 --> A1
+    A1 --> A2 & A3
+
+    style I4 fill:#f9f,stroke:#333,stroke-width:4px
+    style M1 fill:#9ff,stroke:#333,stroke-width:2px
+```
+
+## Model Generation Flow
+
+```mermaid
+sequenceDiagram
+    participant Resource as XResource
+    participant Inspector as XInspector
+    participant ModelGen as ModelGenerator
+    participant Registry as XModels
+    participant Repo as XRepo
+
+    Resource->>Inspector: Create Inspector(resource)
+    Inspector->>Resource: discover_schema()
+    Resource-->>Inspector: Schema data
+    Inspector->>Inspector: profile_data()
+    Inspector->>Inspector: detect_categorical_fields()
+    
+    Inspector->>ModelGen: generate_model(InspectionResult)
+    ModelGen->>ModelGen: _schema_to_fields()
+    ModelGen->>ModelGen: Create Pydantic model
+    ModelGen-->>Inspector: Generated Model Class
+    
+    Inspector-->>Registry: Register model
+    Registry->>Registry: Generate UI schema
+    Registry->>Registry: Setup permissions
+    Registry->>Registry: Configure audit
+    
+    Registry-->>Repo: Model available for use
+    Repo->>Repo: Use model for type-safe operations
+```
+
+## Resource Type Auto-Detection
+
+```mermaid
+flowchart LR
+    subgraph "XRepoFactory.create()"
+        RF[Resource Provided?]
+        RF -->|Yes| RT{Resource Type?}
+        RF -->|No| DT[Data Provided?]
+        
+        RT -->|Database/File| CR[ConnectedRepo]
+        RT -->|REST/WebSocket/EventStream| MR[MaterializedRepo]
+        
+        DT -->|Yes| MR
+        
+        OM[Materialized Override?]
+        OM -->|True| MR
+        OM -->|False| CR
+        
+        RT --> OM
+    end
+    
+    style MR fill:#f96,stroke:#333,stroke-width:2px
+    style CR fill:#69f,stroke:#333,stroke-width:2px
+```
 
 ```mermaid
 flowchart TB

@@ -17,10 +17,12 @@ The Inspector module provides a unified interface for data inspection, schema di
 
 1. **Schema Discovery** - Inspect and extract schema from any data source
 2. **Data Profiling** - Statistical analysis and data quality assessment
-3. **Model Generation** - Create Pydantic models from discovered schemas
+3. **Model Generation** - Create Pydantic models from discovered schemas (**Sole responsibility in the architecture**)
 4. **Data Preview** - Sample data extraction and visualization
 5. **Metadata Extraction** - Gather comprehensive metadata about data sources
 6. **Categorical Field Detection** - Identify and manage enumerable fields with distinct values
+
+**Important**: XInspector is the only component responsible for model generation. Other components (XRepo, XModels) use Inspector-generated models but never generate models themselves.
 
 ## Design Principles
 
@@ -110,6 +112,13 @@ class BaseInspector(ABC):
             categorical_fields=categorical_fields,
             model_name=self._generate_model_name()
         )
+    
+    async def generate_model(self, collection_name: Optional[str] = None) -> Type[XObjPrototype]:
+        """Convenience method to inspect and generate model in one step"""
+        result = await self.inspect()
+        if collection_name:
+            result.model_name = collection_name
+        return ModelGenerator.generate_model(result)
 ```
 
 ## Inspector Implementations

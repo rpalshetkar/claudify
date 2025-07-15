@@ -4,7 +4,7 @@
 
 XObjPrototype is a foundational abstraction that extends Pydantic's BaseModel to provide enhanced validation, namespace support, and metadata management capabilities. It serves as an **abstract base class** for all data models in the system, ensuring consistent validation patterns and integration with the namespace architecture.
 
-**Important**: XObjPrototype cannot be instantiated directly - it must be subclassed. The implementation uses strict ABC enforcement with `__init_subclass__` validation to ensure all required methods are implemented.
+**Important**: XObjPrototype cannot be instantiated directly - it must be subclassed. The implementation uses strict ABC (Abstract Base Class) pattern with runtime enforcement in `__init__` to prevent direct instantiation, raising `InstantiationError` if attempted.
 
 ## Core Features
 
@@ -32,11 +32,12 @@ XObjPrototype is a foundational abstraction that extends Pydantic's BaseModel to
 
 ### 4. Metadata Management
 
-- Flat dictionary metadata storage (Dict[str, Any])
-- Helper methods for metadata manipulation
+- **Flat dictionary storage** (Dict[str, Any]) - Simple key-value pairs with no schema constraints
+- Helper methods for metadata manipulation (`add_metadata`, `get_metadata`)
 - Runtime introspection capabilities
 - Excluded from serialization by default
 - Fluent interface for metadata operations
+- Maximum flexibility for different use cases
 
 ### 5. Serialization/Deserialization
 
@@ -181,35 +182,35 @@ except ValidationError as e:
 
 ```python
 from abc import ABC, abstractmethod
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field
 from typing import Any, Dict, List, Optional
-import inspect
 
 class XObjPrototype(BaseModel, ABC):
-    """Abstract base class with strict enforcement"""
+    """
+    Abstract base class with strict ABC enforcement.
     
-    # Metadata storage - flat dictionary
+    Key Decisions:
+    - Strict runtime enforcement via __init__ check
+    - Flat metadata dictionary for maximum flexibility
+    - Required abstract method: get_ns() only
+    - Optional methods have sensible defaults
+    """
+    
+    # Metadata storage - flat dictionary (no schema constraints)
     _metadata: Dict[str, Any] = Field(default_factory=dict, exclude=True)
     
     def __init__(self, **data: Any) -> None:
+        """Enforce abstract class - cannot instantiate directly"""
         if type(self) is XObjPrototype:
             raise InstantiationError(
                 "Cannot instantiate XObjPrototype directly. Create a subclass."
             )
         super().__init__(**data)
     
-    def __init_subclass__(cls, **kwargs):
-        """Validate subclass implementation at class definition time"""
-        super().__init_subclass__(**kwargs)
-        if not inspect.isabstract(cls):
-            # Check required abstract method implementation
-            if cls.get_ns is XObjPrototype.get_ns:
-                raise TypeError(f"{cls.__name__} must implement get_ns()")
-    
-    # Required abstract method
+    # Required abstract method - must be implemented by subclasses
     @abstractmethod
     def get_ns(self) -> str:
-        """Return the namespace for this model"""
+        """Return the namespace for this model type"""
         pass
     
     # Optional methods with sensible defaults
@@ -346,9 +347,9 @@ class NamespaceRegistrar:
 1. **Abstract Base Class Structure**
 
    - Create XObjPrototype with strict ABC pattern
-   - Implement __init_subclass__ validation
-   - Define required and optional methods
-   - Add metadata storage with helper methods
+   - Implement runtime enforcement in __init__
+   - Define required abstract method (get_ns only)
+   - Add flat metadata storage with helper methods
    - Implement fuzzy search field detection
 
 2. **Validation Framework**
@@ -408,6 +409,17 @@ class NamespaceRegistrar:
    - Bulk validation methods
    - Index optimization hints
 
+## Architectural Decisions
+
+Based on the architecture review, the following key decisions have been implemented:
+
+1. **Strict ABC Pattern**: Runtime enforcement in `__init__` prevents direct instantiation
+2. **Flat Metadata Structure**: Simple Dict[str, Any] for maximum flexibility
+3. **Minimal Required Methods**: Only `get_ns()` is abstract/required
+4. **Fuzzy Search**: Field-level metadata using Pydantic Field(fuzzy_searchable=True)
+5. **Error Handling**: Domain-specific exception hierarchy (XObjPrototypeError base)
+6. **Registration Order**: Manual registration during startup sequence
+
 ## Technical Architecture
 
 ### Class Hierarchy
@@ -433,8 +445,7 @@ pydantic.BaseModel
 - `get_indexes()` - Returns index definitions (default: empty list)
 
 **Core Methods:**
-- `__init__()` - Prevents direct instantiation with InstantiationError
-- `__init_subclass__()` - Validates subclass implementation
+- `__init__()` - Prevents direct instantiation with InstantiationError (runtime enforcement)
 
 **Metadata Methods:**
 - `add_metadata(**kwargs)` - Fluent interface for adding metadata
@@ -480,12 +491,16 @@ def test_cannot_instantiate_directly():
     with pytest.raises(InstantiationError, match="Cannot instantiate XObjPrototype directly"):
         XObjPrototype()
 
-def test_missing_get_ns_implementation():
-    """Test error when get_ns() not implemented"""
-    with pytest.raises(TypeError, match="must implement get_ns"):
-        class BadModel(XObjPrototype):
-            name: str
-            # Missing get_ns() implementation
+def test_subclass_without_get_ns():
+    """Test that abstract method must be implemented"""
+    # This will create successfully but cannot instantiate
+    class BadModel(XObjPrototype):
+        name: str
+        # Missing get_ns() implementation
+    
+    # Attempting to instantiate will fail due to abstract method
+    with pytest.raises(TypeError, match="Can't instantiate abstract class"):
+        BadModel(name="test")
 
 def test_metadata_operations():
     """Test metadata helper methods"""

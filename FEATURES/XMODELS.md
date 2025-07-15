@@ -4,6 +4,14 @@
 
 The Dynamic Model Registry provides runtime model registration and management with automatic UI generation, permissions, and audit logging. It works in conjunction with the Inspector module for schema discovery and model generation.
 
+## Architectural Decision
+
+**Clear Separation of Concerns**:
+- **XInspector**: Analyzes data sources and generates models (creation phase)
+- **XModels**: Registers and manages models at runtime (management phase)
+
+This separation ensures that model generation logic remains centralized in Inspector while the registry focuses on runtime operations.
+
 ## Core Responsibility
 
 The registry focuses solely on:
@@ -14,7 +22,7 @@ The registry focuses solely on:
 - Audit logging
 - CRUD/CQRS operations
 
-Schema discovery, data profiling, and model generation are handled by the Inspector module (see [XINSPECTOR.md](./XINSPECTOR.md)).
+**Important**: Schema discovery, data profiling, and model generation are handled exclusively by the Inspector module (see [XINSPECTOR.md](./XINSPECTOR.md)). This registry only handles registration and management of already-generated models.
 
 ## Architecture
 
@@ -425,17 +433,14 @@ class DynamicModelRegistry:
         model_name: str = None
     ) -> str:
         """Register a model discovered from a resource"""
-        from src.server.core.inspector import InspectorFactory, ModelGenerator
+        from src.server.core.inspector import XInspector
 
-        # Use Inspector to discover schema
-        inspector = InspectorFactory.create(resource)
-        result = await inspector.inspect()
+        # Use Inspector to discover schema and generate model
+        inspector = XInspector(resource)
+        model_class = await inspector.generate_model(collection_name=model_name)
 
-        # Generate model
-        model_class = ModelGenerator.generate_model(result)
-
-        # Register with registry
-        name = model_name or result.model_name
+        # Register the generated model
+        name = model_name or model_class.__name__
         self.register_model(name, model_class)
 
         return name

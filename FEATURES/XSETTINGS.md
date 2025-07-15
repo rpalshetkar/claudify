@@ -11,6 +11,7 @@ XSettings is a configuration management system built on top of DynaConf and XObj
 - XSettings inherits from XObjPrototype for Pydantic-based validation
 - Provides type safety and automatic validation
 - Integrates with the project's base model architecture
+- Implements required `get_ns()` method returning "settings"
 
 ### 2. Loading Order: Configurable (Option C)
 
@@ -197,6 +198,10 @@ class XSettings(XObjPrototype):
     def set_default(cls, settings: XSettings) -> None:
         """Set default settings instance."""
         cls._default_instance = settings
+    
+    def get_ns(self) -> str:
+        """Return namespace for settings - required by XObjPrototype"""
+        return "settings"
 ```
 
 ### Loading Order Configuration
