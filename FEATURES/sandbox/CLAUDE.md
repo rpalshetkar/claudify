@@ -25,3 +25,7 @@ This is base for any enterprise grade backend which is supposed to work for smal
 ## Development Workflow
 
 - Always run demos and tests using uv so that env is set properly. You don't need to run venv kind of scripts at all
+
+## Type Annotations
+
+- dont use union optional, use latest operators like | follow latest python standards

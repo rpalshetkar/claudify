@@ -196,6 +196,7 @@ Then use: `uv run dev`, `uv run test`, `uv run check`
 14. **Never concatenate SQL** - use parameters
 15. **Follow import rules** from PYTHON_STANDARDS.md
 16. **Use only approved packages** from PYTHON_STACK.md
+17. Latest python type annotations - no Any, Optional, Union etc
 
 ## Quick Implementation Guide
 
